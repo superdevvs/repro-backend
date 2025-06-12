@@ -54,5 +54,25 @@ class UserController extends Controller
 
         return response()->json(['message' => 'User created successfully.', 'user' => $user], 201);
     }
+
+    public function getClients()
+    {
+        $clients = User::where('role', 'client')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $clients
+        ]);
+    }
+
+    public function getPhotographers()
+    {
+        $photographers = User::where('role', 'photographer')->get();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => $photographers
+        ]);
+    }
 }
 

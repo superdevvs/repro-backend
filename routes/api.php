@@ -6,6 +6,7 @@ use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\API\ShootController;
 
 
 Route::get('/user', function (Request $request) {
@@ -29,12 +30,21 @@ Route::middleware('auth:sanctum')->get('/admin/users', [UserController::class, '
 
 Route::middleware(['auth:sanctum'])->post('/admin/users', [UserController::class, 'store']);
 
+Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->get('/admin/clients', [UserController::class, 'getClients']);
+
+Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->get('/admin/photographers', [UserController::class, 'getPhotographers']);
+
 Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function () {
     Route::post('/admin/services', [ServiceController::class, 'store']);
 
     Route::put('/admin/services/{id}', [ServiceController::class, 'update']);
 
     Route::delete('/admin/services/{id}', [ServiceController::class, 'destroy']);
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/shoots', [ShootController::class, 'index']);
+    Route::post('/shoots', [ShootController::class, 'store']);
 });
 
 Route::get('/services', [ServiceController::class, 'index']);
