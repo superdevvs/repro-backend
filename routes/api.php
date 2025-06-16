@@ -58,3 +58,9 @@ Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function ()
     Route::put('/categories/{id}', [CategoryController::class, 'update']);
     Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
 });
+
+Route::prefix('photographer/availability')->group(function () {
+    Route::get('/{photographerId}', [PhotographerAvailabilityController::class, 'index']);
+    Route::post('/', [PhotographerAvailabilityController::class, 'store']);
+    Route::delete('/{id}', [PhotographerAvailabilityController::class, 'destroy']);
+});
