@@ -7,6 +7,8 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\API\ShootController;
+use App\Http\Controllers\PhotographerAvailabilityController;
+use App\Http\Controllers\PhotographerShootController;
 
 
 Route::get('/user', function (Request $request) {
@@ -63,4 +65,9 @@ Route::prefix('photographer/availability')->group(function () {
     Route::get('/{photographerId}', [PhotographerAvailabilityController::class, 'index']);
     Route::post('/', [PhotographerAvailabilityController::class, 'store']);
     Route::delete('/{id}', [PhotographerAvailabilityController::class, 'destroy']);
+});
+
+// routes/api.php
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::get('/photographer/shoots', [PhotographerShootController::class, 'index']);
 });
