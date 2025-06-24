@@ -40,4 +40,25 @@ class ShootController extends Controller
 
         return response()->json(['message' => 'Shoot created successfully', 'data' => $shoot], 201);
     }
+
+    public function uploadFiles(Request $request, $shootId)
+    {
+        $request->validate([
+            'files.*' => 'required|file|max:10240', // max 10MB per file
+        ]);
+
+        $shoot = Shoot::findOrFail($shootId);
+
+        foreach ($request->file('files') as $file) {
+            $path = $file->store('shoots/' . $shootId, 'public');
+            // Optionally, save file info to DB
+            $shoot->files()->create([
+                'filename' => $file->getClientOriginalName(),
+                'path' => $path,
+                'uploaded_by' => auth()->id(),
+            ]);
+        }
+
+        return response()->json(['message' => 'Files uploaded successfully.']);
+    }
 }

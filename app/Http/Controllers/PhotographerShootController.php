@@ -14,7 +14,6 @@ class PhotographerShootController extends Controller
         $photographerId = Auth::id();
 
         $shoots = Shoot::with(['client', 'service','photographer'])
-                        ->where('photographer_id', $photographerId)
                         ->get();
 
         return response()->json([

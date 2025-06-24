@@ -71,3 +71,5 @@ Route::prefix('photographer/availability')->group(function () {
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/photographer/shoots', [PhotographerShootController::class, 'index']);
 });
+
+Route::post('/shoots/{shoot}/upload', [ShootController::class, 'uploadFiles'])->name('shoots.upload');
