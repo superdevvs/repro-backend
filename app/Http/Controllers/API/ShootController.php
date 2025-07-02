@@ -43,22 +43,56 @@ class ShootController extends Controller
 
     public function uploadFiles(Request $request, $shootId)
     {
+        // Validate the request
         $request->validate([
-            'files.*' => 'required|file|max:10240', // max 10MB per file
+            'files' => 'required|array',
+            'files.*' => 'required|file|max:10240|mimes:jpeg,jpg,png,gif,mp4,mov,avi', // 10MB max per file
         ]);
 
+        // Find the shoot
         $shoot = Shoot::findOrFail($shootId);
+        
+        $uploadedFiles = [];
 
-        foreach ($request->file('files') as $file) {
-            $path = $file->store('shoots/' . $shootId, 'public');
-            // Optionally, save file info to DB
-            $shoot->files()->create([
-                'filename' => $file->getClientOriginalName(),
-                'path' => $path,
-                'uploaded_by' => auth()->id(),
+        try {
+            foreach ($request->file('files') as $file) {
+                // Generate unique filename
+                $originalName = $file->getClientOriginalName();
+                $extension = $file->getClientOriginalExtension();
+                $filename = time() . '_' . uniqid() . '.' . $extension;
+                
+                // Store the file
+                $path = $file->storeAs('shoots/' . $shootId, $filename, 'public');
+                
+                // Save file information to database (assuming you have a files table)
+                $fileRecord = $shoot->files()->create([
+                    'filename' => $originalName,
+                    'stored_filename' => $filename,
+                    'path' => $path,
+                    'file_type' => $file->getMimeType(),
+                    'file_size' => $file->getSize(),
+                    'uploaded_by' => auth()->id(),
+                ]);
+
+                $uploadedFiles[] = [
+                    'id' => $fileRecord->id,
+                    'filename' => $originalName,
+                    'path' => $path,
+                    'url' => Storage::url($path),
+                ];
+            }
+
+            return response()->json([
+                'message' => 'Files uploaded successfully.',
+                'files' => $uploadedFiles,
+                'count' => count($uploadedFiles)
             ]);
-        }
 
-        return response()->json(['message' => 'Files uploaded successfully.']);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to upload files.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }
