@@ -34,7 +34,7 @@ Route::middleware(['auth:sanctum'])->post('/admin/users', [UserController::class
 
 Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->get('/admin/clients', [UserController::class, 'getClients']);
 
-Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->get('/admin/photographers', [UserController::class, 'getPhotographers']);
+Route::middleware(['auth:sanctum', 'role:admin,super_admin,client'])->get('/admin/photographers', [UserController::class, 'getPhotographers']);
 
 Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function () {
     Route::post('/admin/services', [ServiceController::class, 'store']);
