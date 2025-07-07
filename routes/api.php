@@ -72,4 +72,4 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/photographer/shoots', [PhotographerShootController::class, 'index']);
 });
 
-Route::post('/shoots/{shoot}/upload', [ShootController::class, 'uploadFiles'])->name('shoots.upload');
+Route::middleware('auth:sanctum')->post('/shoots/{shoot}/upload', [ShootController::class, 'uploadFiles'])->name('shoots.upload');

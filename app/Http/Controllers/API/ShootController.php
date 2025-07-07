@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Shoot;
+use Illuminate\Support\Facades\Storage;
 
 class ShootController extends Controller
 {

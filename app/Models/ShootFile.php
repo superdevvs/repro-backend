@@ -24,6 +24,8 @@ class ShootFile extends Model
         'file_size' => 'integer',
     ];
 
+    protected $appends = ['url'];
+
     /**
      * Get the shoot that owns the file.
      */
