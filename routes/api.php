@@ -22,6 +22,12 @@ Route::get('/ping', function () {
     ]);
 });
 
+use App\Http\Controllers\DropboxAuthController;
+
+Route::post('/auth/dropbox/token', [DropboxAuthController::class, 'exchangeToken']);
+Route::post('/auth/dropbox/refresh', [DropboxAuthController::class, 'refreshToken']);
+Route::post('/auth/dropbox/revoke', [DropboxAuthController::class, 'revokeToken']);
+
 Route::post('/register', [AuthController::class, 'register']);
 
 Route::post('/login', [AuthController::class, 'login']);
