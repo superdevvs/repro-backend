@@ -9,6 +9,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\API\ShootController;
 use App\Http\Controllers\PhotographerAvailabilityController;
 use App\Http\Controllers\PhotographerShootController;
+use App\Http\Controllers\PaymentController;
 
 
 Route::get('/user', function (Request $request) {
@@ -27,6 +28,8 @@ use App\Http\Controllers\DropboxAuthController;
 Route::post('/auth/dropbox/token', [DropboxAuthController::class, 'exchangeToken']);
 Route::post('/auth/dropbox/refresh', [DropboxAuthController::class, 'refreshToken']);
 Route::post('/auth/dropbox/revoke', [DropboxAuthController::class, 'revokeToken']);
+
+Route::post('/shoots/{shoot}/create-payment-link', [PaymentController::class, 'createCheckoutLink']);
 
 Route::post('/register', [AuthController::class, 'register']);
 

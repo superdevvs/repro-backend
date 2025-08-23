@@ -30,6 +30,12 @@ return [
         'redirect_uri' => env('FRONTEND_URL') . '/dropbox-callback',
     ],
 
+    'square' => [
+        'access_token' => env('SQUARE_ACCESS_TOKEN'),
+        'location_id' => env('SQUARE_LOCATION_ID'),
+        'environment' => env('SQUARE_ENVIRONMENT'),
+    ],
+
     'resend' => [
         'key' => env('RESEND_KEY'),
     ],
