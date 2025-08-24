@@ -28,6 +28,7 @@ use App\Http\Controllers\DropboxAuthController;
 Route::post('/auth/dropbox/token', [DropboxAuthController::class, 'exchangeToken']);
 Route::post('/auth/dropbox/refresh', [DropboxAuthController::class, 'refreshToken']);
 Route::post('/auth/dropbox/revoke', [DropboxAuthController::class, 'revokeToken']);
+Route::any('/dropbox/webhook', [DropboxAuthController::class, 'webhook']);
 
 Route::post('/shoots/{shoot}/create-payment-link', [PaymentController::class, 'createCheckoutLink']);
 

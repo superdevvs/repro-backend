@@ -1,219 +1,90 @@
-// Update your DropboxCallback.tsx component to work with Laravel
+<?php
 
-import React, { useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+namespace App\Http\Controllers;
 
-const DropboxCallback: React.FC = () => {
-  const [searchParams] = useSearchParams();
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
 
-  useEffect(() => {
-    const handleCallback = async () => {
-      const code = searchParams.get('code');
-      const error = searchParams.get('error');
-
-      if (error) {
-        // Send error message to parent window
-        if (window.opener) {
-          window.opener.postMessage({
-            type: 'DROPBOX_AUTH_ERROR',
-            error: error
-          }, window.location.origin);
+class DropboxAuthController extends Controller
+{
+    /**
+     * Dropbox Webhook endpoint
+     * Handles verification (GET) and notifications (POST).
+     */
+    public function webhook(Request $request)
+    {
+        // 1. Verification step (GET)
+        if ($request->isMethod('get')) {
+            $challenge = $request->query('challenge');
+            if ($challenge) {
+                return response($challenge, 200)
+                    ->header('Content-Type', 'text/plain');
+            }
         }
-        return;
-      }
 
-      if (code) {
+        // 2. Notification step (POST)
+        if ($request->isMethod('post')) {
+            $payload = $request->getContent();
+            Log::info('Dropbox Webhook Payload:', [$payload]);
+
+            // Dropbox sends account_ids that changed
+            $data = json_decode($payload, true);
+            if (isset($data['list_folder']['accounts'])) {
+                foreach ($data['list_folder']['accounts'] as $accountId) {
+                    Log::info("Dropbox change detected for account: " . $accountId);
+
+                    // Example: Fetch latest changes using Dropbox API
+                    // You would need to store access_token per user earlier
+                    // $accessToken = ... get from DB ...
+                    // $this->fetchLatestChanges($accessToken, $accountId);
+                }
+            }
+
+            return response()->json(['status' => 'ok'], 200);
+        }
+
+        return response()->json(['error' => 'Invalid request'], 400);
+    }
+
+    /**
+     * Fetch latest changes from Dropbox after webhook trigger
+     */
+    private function fetchLatestChanges($accessToken, $accountId)
+    {
         try {
-          // Get auth token for API calls
-          const authToken = localStorage.getItem('authToken');
-          
-          // Exchange code for access token using Laravel API
-          const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/dropbox/token`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authToken}`, // Include your app's auth token if needed
-              'Accept': 'application/json'
-            },
-            body: JSON.stringify({ code })
-          });
+            // Call Dropbox API: /2/files/list_folder/continue with stored cursor
+            $cursor = null; // load from DB for user
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to exchange code for token');
-          }
+            $endpoint = $cursor
+                ? 'https://api.dropboxapi.com/2/files/list_folder/continue'
+                : 'https://api.dropboxapi.com/2/files/list_folder';
 
-          const data = await response.json();
-          
-          // Send success message to parent window
-          if (window.opener) {
-            window.opener.postMessage({
-              type: 'DROPBOX_AUTH_SUCCESS',
-              accessToken: data.access_token,
-              tokenType: data.token_type,
-              expiresIn: data.expires_in
-            }, window.location.origin);
-          }
-        } catch (error) {
-          console.error('Token exchange error:', error);
-          if (window.opener) {
-            window.opener.postMessage({
-              type: 'DROPBOX_AUTH_ERROR',
-              error: error instanceof Error ? error.message : 'Failed to complete authentication'
-            }, window.location.origin);
-          }
+            $body = $cursor
+                ? ['cursor' => $cursor]
+                : ['path' => '', 'recursive' => true];
+
+            $response = Http::withToken($accessToken)
+                ->post($endpoint, $body);
+
+            if ($response->successful()) {
+                $changes = $response->json();
+                Log::info("Fetched changes for $accountId", $changes);
+
+                // Update cursor in DB for next time
+                // DB::table('dropbox_users')->where('account_id', $accountId)->update(['cursor' => $changes['cursor']]);
+
+                // Process new/updated/deleted files
+            } else {
+                Log::error("Dropbox API error: " . $response->body());
+            }
+        } catch (\Exception $e) {
+            Log::error("Error fetching Dropbox changes: " . $e->getMessage());
         }
-      }
-    };
-
-    handleCallback();
-  }, [searchParams]);
-
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-background">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Completing Dropbox authentication...</p>
-      </div>
-    </div>
-  );
-};
-
-export default DropboxCallback;
-
-// Also update your FileUploader component's connectDropbox function:
-
-const connectDropbox = async () => {
-  setDropboxAuth(prev => ({ ...prev, isConnecting: true }));
-  
-  try {
-    // Your Dropbox App Key (get this from Dropbox App Console)
-    const APP_KEY = import.meta.env.VITE_DROPBOX_APP_KEY || 'your_dropbox_app_key';
-    const REDIRECT_URI = `${window.location.origin}/dropbox-callback`;
-    
-    // Create authorization URL
-    const authUrl = `https://www.dropbox.com/oauth2/authorize?client_id=${APP_KEY}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&token_access_type=offline`;
-    
-    // Open popup window for authentication
-    const popup = window.open(
-      authUrl,
-      'dropbox-auth',
-      'width=600,height=700,scrollbars=yes,resizable=yes'
-    );
-    
-    // Listen for the callback
-    const handleCallback = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      
-      if (event.data.type === 'DROPBOX_AUTH_SUCCESS') {
-        const { accessToken, tokenType, expiresIn } = event.data;
-        localStorage.setItem('dropbox_access_token', accessToken);
-        if (expiresIn) {
-          localStorage.setItem('dropbox_token_expires', (Date.now() + (expiresIn * 1000)).toString());
-        }
-        
-        setDropboxAuth({
-          isAuthenticated: true,
-          accessToken,
-          isConnecting: false
-        });
-        popup?.close();
-        loadDropboxFiles();
-        
-        toast({
-          title: "Dropbox Connected",
-          description: "Successfully connected to Dropbox. Loading your files...",
-        });
-      } else if (event.data.type === 'DROPBOX_AUTH_ERROR') {
-        setDropboxAuth(prev => ({ ...prev, isConnecting: false }));
-        toast({
-          title: "Connection Failed",
-          description: event.data.error || "Failed to connect to Dropbox. Please try again.",
-          variant: "destructive"
-        });
-        popup?.close();
-      }
-    };
-    
-    window.addEventListener('message', handleCallback);
-    
-    // Clean up if popup is closed manually
-    const checkClosed = setInterval(() => {
-      if (popup?.closed) {
-        clearInterval(checkClosed);
-        window.removeEventListener('message', handleCallback);
-        setDropboxAuth(prev => ({ ...prev, isConnecting: false }));
-      }
-    }, 1000);
-    
-  } catch (error) {
-    console.error('Dropbox connection error:', error);
-    setDropboxAuth(prev => ({ ...prev, isConnecting: false }));
-    toast({
-      title: "Connection Error",
-      description: "An error occurred while connecting to Dropbox.",
-      variant: "destructive"
-    });
-  }
-};
-
-// Optional: Add token refresh functionality
-const refreshDropboxToken = async () => {
-  const refreshToken = localStorage.getItem('dropbox_refresh_token');
-  if (!refreshToken) return false;
-
-  try {
-    const authToken = localStorage.getItem('authToken');
-    
-    const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/dropbox/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ refresh_token: refreshToken })
-    });
-
-    if (!response.ok) return false;
-
-    const data = await response.json();
-    localStorage.setItem('dropbox_access_token', data.access_token);
-    if (data.expires_in) {
-      localStorage.setItem('dropbox_token_expires', (Date.now() + (data.expires_in * 1000)).toString());
     }
 
-    setDropboxAuth(prev => ({
-      ...prev,
-      accessToken: data.access_token
-    }));
-
-    return true;
-  } catch (error) {
-    console.error('Token refresh failed:', error);
-    return false;
-  }
-};
-
-// Check if token is expired and refresh if needed
-const checkTokenExpiry = async () => {
-  const expiresAt = localStorage.getItem('dropbox_token_expires');
-  if (!expiresAt) return;
-
-  const expiryTime = parseInt(expiresAt);
-  const now = Date.now();
-  
-  // Refresh token 5 minutes before expiry
-  if (now >= (expiryTime - 5 * 60 * 1000)) {
-    const refreshed = await refreshDropboxToken();
-    if (!refreshed) {
-      // Refresh failed, disconnect
-      disconnectDropbox();
-      toast({
-        title: "Session Expired",
-        description: "Your Dropbox session has expired. Please reconnect.",
-        variant: "destructive"
-      });
-    }
-  }
-};
+    // (Already added before in your routes file)
+    public function exchangeToken(Request $request) {}
+    public function refreshToken(Request $request) {}
+    public function revokeToken(Request $request) {}
+}
