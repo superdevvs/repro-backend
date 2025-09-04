@@ -10,6 +10,7 @@ use App\Http\Controllers\API\ShootController;
 use App\Http\Controllers\PhotographerAvailabilityController;
 use App\Http\Controllers\PhotographerShootController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\DropboxAuthController;
 
 
 Route::get('/user', function (Request $request) {
@@ -23,14 +24,47 @@ Route::get('/ping', function () {
     ]);
 });
 
-use App\Http\Controllers\DropboxAuthController;
+Route::prefix('dropbox')->name('dropbox.')->group(function () {
+    // Auth
+    Route::get('connect', [DropboxAuthController::class, 'connect'])->name('connect');
+    Route::get('callback', [DropboxAuthController::class, 'callback'])->name('callback');
+    Route::post('disconnect', [DropboxAuthController::class, 'disconnect'])->name('disconnect');
 
-Route::post('/auth/dropbox/token', [DropboxAuthController::class, 'exchangeToken']);
-Route::post('/auth/dropbox/refresh', [DropboxAuthController::class, 'refreshToken']);
-Route::post('/auth/dropbox/revoke', [DropboxAuthController::class, 'revokeToken']);
-Route::any('/dropbox/webhook', [DropboxAuthController::class, 'webhook']);
+    // User Info
+    Route::get('user', [DropboxAuthController::class, 'getUserAccount'])->name('user');
 
-Route::post('/shoots/{shoot}/create-payment-link', [PaymentController::class, 'createCheckoutLink']);
+    // File Operations
+    Route::get('files/list', [DropboxAuthController::class, 'listFiles'])->name('files.list');
+    Route::post('files/upload', [DropboxAuthController::class, 'uploadFile'])->name('files.upload');
+    Route::get('files/download', [DropboxAuthController::class, 'downloadFile'])->name('files.download');
+    Route::post('files/delete', [DropboxAuthController::class, 'deleteFile'])->name('files.delete');
+
+    // Webhook (can be in api.php if it's stateless)
+    Route::match(['get', 'post'], 'webhook', [DropboxAuthController::class, 'webhook'])->name('webhook');
+});
+
+// Route::post('/shoots/{shoot}/create-payment-link', [PaymentController::class, 'createCheckoutLink']);
+
+Route::post('webhooks/square', [PaymentController::class, 'handleWebhook'])
+    ->middleware('square.webhook') // Verifies the request is genuinely from Square
+    ->name('webhooks.square');
+
+// Group of routes that require user authentication (e.g., using Sanctum)
+Route::middleware('auth:sanctum')->group(function () {
+    
+    // Creates a checkout link for a specific photography shoot.
+    // The {shoot} parameter is a route model binding.
+    // e.g., POST /api/shoots/123/create-checkout-link
+    Route::post('shoots/{shoot}/create-checkout-link', [PaymentController::class, 'createCheckoutLink'])
+        ->name('api.shoots.payment.create-link');
+
+    // Initiates a refund for a given payment.
+    // The Square Payment ID should be sent in the request body.
+    // e.g., POST /api/payments/refund
+    Route::post('payments/refund', [PaymentController::class, 'refundPayment'])
+        ->name('api.payments.refund');
+
+});
 
 Route::post('/register', [AuthController::class, 'register']);
 
@@ -72,9 +106,29 @@ Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function ()
 });
 
 Route::prefix('photographer/availability')->group(function () {
+    // Get all availability for a photographer
     Route::get('/{photographerId}', [PhotographerAvailabilityController::class, 'index']);
+
+    // Add single availability
     Route::post('/', [PhotographerAvailabilityController::class, 'store']);
+
+    // Bulk add availability (weekly schedule)
+    Route::post('/bulk', [PhotographerAvailabilityController::class, 'bulkStore']);
+
+    // Update availability
+    Route::put('/{id}', [PhotographerAvailabilityController::class, 'update']);
+
+    // Delete single availability
     Route::delete('/{id}', [PhotographerAvailabilityController::class, 'destroy']);
+
+    // Clear all availability for a photographer
+    Route::delete('/clear/{photographerId}', [PhotographerAvailabilityController::class, 'clearAll']);
+
+    // Check availability for a specific date (for one photographer)
+    Route::post('/check', [PhotographerAvailabilityController::class, 'checkAvailability']);
+
+    // Find all photographers available for given date & time
+    Route::post('/available-photographers', [PhotographerAvailabilityController::class, 'availablePhotographers']);
 });
 
 // routes/api.php
