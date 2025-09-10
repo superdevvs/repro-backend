@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use App\Mail\AccountCreatedMail;
+use Illuminate\Support\Facades\Mail;
 
 class AuthController extends Controller
 {
@@ -38,6 +40,8 @@ class AuthController extends Controller
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
+
+        Mail::to($user->email)->send(new AccountCreatedMail($user));
 
         return response()->json([
             'message' => 'User registered successfully.',

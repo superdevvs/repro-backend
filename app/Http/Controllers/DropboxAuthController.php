@@ -145,7 +145,7 @@ class DropboxAuthController extends Controller
     public function getUserAccount()
     {
         // $accessToken = $this->getValidAccessTokenForUser(); // Your logic to get a valid token
-        $accessToken = "USER_ACCESS_TOKEN_FROM_DB"; // Placeholder
+    $accessToken = config('services.dropbox.access_token'); // Use config value
 
         $response = Http::withToken($accessToken)
             ->post($this->dropboxApiUrl . '/users/get_current_account');
@@ -171,7 +171,7 @@ class DropboxAuthController extends Controller
         $path = $request->input('path', ''); // Default to root directory
 
         // $accessToken = $this->getValidAccessTokenForUser();
-        $accessToken = "USER_ACCESS_TOKEN_FROM_DB"; // Placeholder
+    $accessToken = config('services.dropbox.access_token'); // Use config value
 
         $response = Http::withToken($accessToken)
             ->post($this->dropboxApiUrl . '/files/list_folder', [
@@ -198,8 +198,7 @@ class DropboxAuthController extends Controller
             'path' => 'required|string', // e.g., "/Apps/MyApp/image.jpg"
         ]);
 
-        // $accessToken = $this->getValidAccessTokenForUser();
-        $accessToken = "USER_ACCESS_TOKEN_FROM_DB"; // Placeholder
+    $accessToken = config('services.dropbox.access_token'); // Use config value
 
         $fileContent = $request->file('file')->get();
         $dropboxPath = $request->input('path');
@@ -234,8 +233,7 @@ class DropboxAuthController extends Controller
             return response()->json(['error' => 'File path is required.'], 400);
         }
 
-        // $accessToken = $this->getValidAccessTokenForUser();
-        $accessToken = "USER_ACCESS_TOKEN_FROM_DB"; // Placeholder
+    $accessToken = config('services.dropbox.access_token'); // Use config value
 
         $apiArgs = json_encode(['path' => $path]);
 
@@ -264,8 +262,7 @@ class DropboxAuthController extends Controller
             return response()->json(['error' => 'Path is required for deletion.'], 400);
         }
 
-        // $accessToken = $this->getValidAccessTokenForUser();
-        $accessToken = "USER_ACCESS_TOKEN_FROM_DB"; // Placeholder
+    $accessToken = config('services.dropbox.access_token'); // Use config value
 
         $response = Http::withToken($accessToken)
             ->post($this->dropboxApiUrl . '/files/delete_v2', [

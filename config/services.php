@@ -28,6 +28,7 @@ return [
         'app_key' => env('DROPBOX_APP_KEY'),
         'app_secret' => env('DROPBOX_APP_SECRET'),
         'redirect_uri' => env('FRONTEND_URL') . '/dropbox-callback',
+        'access_token' => env('DROPBOX_ACCESS_TOKEN'), // Add this line for single account setup
     ],
 
     'square' => [
