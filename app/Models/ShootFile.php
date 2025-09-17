@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ShootFile extends Model
 {
@@ -18,73 +17,88 @@ class ShootFile extends Model
         'file_type',
         'file_size',
         'uploaded_by',
+        'workflow_stage',
+        'dropbox_path',
+        'dropbox_file_id',
+        'moved_to_completed_at',
+        'verified_at',
+        'verified_by',
+        'verification_notes'
     ];
 
     protected $casts = [
-        'file_size' => 'integer',
+        'moved_to_completed_at' => 'datetime',
+        'verified_at' => 'datetime',
     ];
 
-    protected $appends = ['url'];
+    // Workflow stage constants
+    const STAGE_TODO = 'todo';
+    const STAGE_COMPLETED = 'completed';
+    const STAGE_VERIFIED = 'verified';
+    const STAGE_ARCHIVED = 'archived';
 
-    /**
-     * Get the shoot that owns the file.
-     */
-    public function shoot(): BelongsTo
+    public function shoot()
     {
         return $this->belongsTo(Shoot::class);
     }
 
-    /**
-     * Get the user who uploaded the file.
-     */
-    public function uploader(): BelongsTo
+    public function uploadedBy()
     {
         return $this->belongsTo(User::class, 'uploaded_by');
     }
 
-    /**
-     * Get the full URL for the file.
-     */
-    public function getUrlAttribute(): string
+    public function verifiedBy()
     {
-        return asset('storage/' . $this->path);
+        return $this->belongsTo(User::class, 'verified_by');
     }
 
-    /**
-     * Check if the file is an image.
-     */
-    public function isImage(): bool
+    public function canMoveToCompleted()
     {
-        return str_starts_with($this->file_type, 'image/');
+        return $this->workflow_stage === self::STAGE_TODO;
     }
 
-    /**
-     * Check if the file is a video.
-     */
-    public function isVideo(): bool
+    public function canVerify()
     {
-        return str_starts_with($this->file_type, 'video/');
+        return $this->workflow_stage === self::STAGE_COMPLETED;
     }
 
-    /**
-     * Get human readable file size.
-     */
-    public function getFormattedSizeAttribute(): string
+    public function moveToCompleted($userId = null)
     {
-        $bytes = $this->file_size;
-        
-        if ($bytes >= 1073741824) {
-            return number_format($bytes / 1073741824, 2) . ' GB';
-        } elseif ($bytes >= 1048576) {
-            return number_format($bytes / 1048576, 2) . ' MB';
-        } elseif ($bytes >= 1024) {
-            return number_format($bytes / 1024, 2) . ' KB';
-        } elseif ($bytes > 1) {
-            return $bytes . ' bytes';
-        } elseif ($bytes == 1) {
-            return $bytes . ' byte';
-        } else {
-            return '0 bytes';
-        }
+        $this->workflow_stage = self::STAGE_COMPLETED;
+        $this->moved_to_completed_at = now();
+        $this->save();
+
+        // Log the action
+        $this->shoot->workflowLogs()->create([
+            'user_id' => $userId ?? auth()->id(),
+            'action' => 'file_moved_to_completed',
+            'details' => "File '{$this->filename}' moved to completed folder",
+            'metadata' => [
+                'file_id' => $this->id,
+                'filename' => $this->filename,
+                'dropbox_path' => $this->dropbox_path
+            ]
+        ]);
+    }
+
+    public function verify($userId, $notes = null)
+    {
+        $this->workflow_stage = self::STAGE_VERIFIED;
+        $this->verified_at = now();
+        $this->verified_by = $userId;
+        $this->verification_notes = $notes;
+        $this->save();
+
+        // Log the action
+        $this->shoot->workflowLogs()->create([
+            'user_id' => $userId,
+            'action' => 'file_verified',
+            'details' => "File '{$this->filename}' verified by admin",
+            'metadata' => [
+                'file_id' => $this->id,
+                'filename' => $this->filename,
+                'verification_notes' => $notes
+            ]
+        ]);
     }
 }

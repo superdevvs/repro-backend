@@ -4,8 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Shoot extends Model
 {
@@ -13,88 +11,144 @@ class Shoot extends Model
 
     protected $fillable = [
         'client_id',
-        'scheduled_date',
-        'time',
+        'photographer_id',
+        'service_id',
+        'service_category',
         'address',
         'city',
         'state',
         'zip',
-        'photographer_id',
-        'service_id',
-        'notes',
-        'bypass_payment',
-        'send_notification',
+        'scheduled_date',
+        'time',
         'base_quote',
         'tax_amount',
         'total_quote',
         'payment_status',
+        'payment_type',
+        'notes',
         'status',
+        'workflow_status',
         'created_by',
+        'photos_uploaded_at',
+        'editing_completed_at',
+        'admin_verified_at',
+        'verified_by'
     ];
 
-    // ✅ Client is a user
+    protected $casts = [
+        'scheduled_date' => 'date',
+        'photos_uploaded_at' => 'datetime',
+        'editing_completed_at' => 'datetime',
+        'admin_verified_at' => 'datetime',
+        'base_quote' => 'decimal:2',
+        'tax_amount' => 'decimal:2',
+        'total_quote' => 'decimal:2',
+    ];
+
+    // Workflow status constants
+    const WORKFLOW_BOOKED = 'booked';
+    const WORKFLOW_PHOTOS_UPLOADED = 'photos_uploaded';
+    const WORKFLOW_EDITING_COMPLETE = 'editing_complete';
+    const WORKFLOW_ADMIN_VERIFIED = 'admin_verified';
+    const WORKFLOW_COMPLETED = 'completed';
+
     public function client()
     {
         return $this->belongsTo(User::class, 'client_id');
     }
 
-    // ✅ Photographer is also a user
     public function photographer()
     {
         return $this->belongsTo(User::class, 'photographer_id');
     }
 
-    // ✅ Service relationship (if you have a services table)
     public function service()
     {
         return $this->belongsTo(Service::class);
     }
 
-    /**
-     * Get all files for the shoot.
-     */
-    public function files(): HasMany
+    public function verifiedBy()
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function files()
     {
         return $this->hasMany(ShootFile::class);
     }
 
-    /**
-     * Get only image files for the shoot.
-     */
-    public function images(): HasMany
+    public function payments()
     {
-        return $this->hasMany(ShootFile::class)->where('file_type', 'like', 'image/%');
+        return $this->hasMany(Payment::class);
     }
 
-    /**
-     * Get only video files for the shoot.
-     */
-    public function videos(): HasMany
+    public function dropboxFolders()
     {
-        return $this->hasMany(ShootFile::class)->where('file_type', 'like', 'video/%');
+        return $this->hasMany(DropboxFolder::class);
     }
 
-    /**
-     * Get the full address.
-     */
-    public function getFullAddressAttribute(): string
+    public function workflowLogs()
     {
-        return "{$this->address}, {$this->city}, {$this->state} {$this->zip}";
+        return $this->hasMany(WorkflowLog::class);
     }
 
-    /**
-     * Check if the shoot has any files uploaded.
-     */
-    public function hasFiles(): bool
+    // Helper methods
+    public function getTotalPaidAttribute()
     {
-        return $this->files()->count() > 0;
+        return $this->payments()->where('status', 'completed')->sum('amount');
     }
 
-    /**
-     * Get the total number of files.
-     */
-    public function getFileCountAttribute(): int
+    public function getRemainingBalanceAttribute()
     {
-        return $this->files()->count();
+        return $this->total_quote - $this->total_paid;
+    }
+
+    public function canUploadPhotos()
+    {
+        return in_array($this->workflow_status, [self::WORKFLOW_BOOKED]);
+    }
+
+    public function canMoveToCompleted()
+    {
+        return $this->workflow_status === self::WORKFLOW_PHOTOS_UPLOADED;
+    }
+
+    public function canVerify()
+    {
+        return $this->workflow_status === self::WORKFLOW_EDITING_COMPLETE;
+    }
+
+    public function updateWorkflowStatus($status, $userId = null)
+    {
+        $oldStatus = $this->workflow_status;
+        $this->workflow_status = $status;
+
+        // Set timestamps based on status
+        switch ($status) {
+            case self::WORKFLOW_PHOTOS_UPLOADED:
+                $this->photos_uploaded_at = now();
+                break;
+            case self::WORKFLOW_EDITING_COMPLETE:
+                $this->editing_completed_at = now();
+                break;
+            case self::WORKFLOW_ADMIN_VERIFIED:
+                $this->admin_verified_at = now();
+                $this->verified_by = $userId;
+                break;
+        }
+
+        $this->save();
+
+        // Log the workflow change
+        $this->workflowLogs()->create([
+            'user_id' => $userId ?? auth()->id(),
+            'action' => "status_changed_to_{$status}",
+            'details' => "Workflow status changed from {$oldStatus} to {$status}",
+            'metadata' => [
+                'old_status' => $oldStatus,
+                'new_status' => $status,
+                'timestamp' => now()->toISOString()
+            ]
+        ]);
     }
 }

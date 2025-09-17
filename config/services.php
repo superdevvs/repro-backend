@@ -25,16 +25,17 @@ return [
     ],
 
     'dropbox' => [
-        'app_key' => env('DROPBOX_APP_KEY'),
-        'app_secret' => env('DROPBOX_APP_SECRET'),
-        'redirect_uri' => env('FRONTEND_URL') . '/dropbox-callback',
-        'access_token' => env('DROPBOX_ACCESS_TOKEN'), // Add this line for single account setup
+        'client_id' => env('DROPBOX_CLIENT_ID'),
+        'client_secret' => env('DROPBOX_CLIENT_SECRET'),
+        'redirect' => env('APP_URL') . '/api/dropbox/callback',
+        'access_token' => env('DROPBOX_ACCESS_TOKEN'),
     ],
 
     'square' => [
         'access_token' => env('SQUARE_ACCESS_TOKEN'),
         'location_id' => env('SQUARE_LOCATION_ID'),
-        'environment' => env('SQUARE_ENVIRONMENT'),
+        'environment' => env('SQUARE_ENVIRONMENT', 'sandbox'),
+        'currency' => env('SQUARE_CURRENCY', 'USD'),
     ],
 
     'resend' => [

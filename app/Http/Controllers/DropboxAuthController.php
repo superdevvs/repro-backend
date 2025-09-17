@@ -148,6 +148,9 @@ class DropboxAuthController extends Controller
     $accessToken = config('services.dropbox.access_token'); // Use config value
 
         $response = Http::withToken($accessToken)
+            ->withOptions(['verify' => config('app.env') === 'production'])
+            ->withHeaders(['Content-Type' => 'application/json'])
+            ->withBody('null')
             ->post($this->dropboxApiUrl . '/users/get_current_account');
 
         if ($response->successful()) {

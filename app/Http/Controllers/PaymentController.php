@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Shoot; // Your Shoot model
-use App\Models\Payment; // A new model to log payments
+use App\Models\Payment;
 use Square\SquareClient;
 use Square\Models\CreateCheckoutRequest;
 use Square\Models\CreateOrderRequest;
@@ -75,7 +75,7 @@ class PaymentController extends Controller
             );
 
             // Set a redirect URL for after the payment is completed
-            $checkoutRequest->setRedirectUrl(route('shoots.payment.success', ['shoot' => $shoot->id]));
+            $checkoutRequest->setRedirectUrl(config('app.frontend_url') . '/shoots/' . $shoot->id . '/payment-success');
             
             $checkoutResponse = $this->squareClient->getCheckoutApi()->createCheckout(
                 config('services.square.location_id'),
@@ -128,17 +128,21 @@ class PaymentController extends Controller
                     // Prevent duplicate processing
                     if ($shoot && !Payment::where('square_payment_id', $paymentId)->exists()) {
                         // Record the payment in your database
-                        $shoot->payments()->create([
+                        Payment::create([
+                            'shoot_id' => $shoot->id,
                             'amount' => $amount,
                             'currency' => $currency,
                             'square_payment_id' => $paymentId,
                             'square_order_id' => $orderId,
-                            'status' => 'completed',
+                            'status' => Payment::STATUS_COMPLETED,
+                            'processed_at' => now()
                         ]);
 
-                        // Update the total paid amount on the shoot
-                        $shoot->total_paid += $amount;
-                        $shoot->save();
+                        // Update payment status on shoot if fully paid
+                        if ($shoot->remaining_balance <= 0) {
+                            $shoot->payment_status = 'paid';
+                            $shoot->save();
+                        }
 
                         Log::info("Payment for Shoot ID {$shootId} processed successfully.");
                     }
@@ -180,13 +184,15 @@ class PaymentController extends Controller
                 // Update your internal payment record to reflect the refund
                 $payment = Payment::where('square_payment_id', $paymentId)->first();
                 if ($payment) {
-                    $payment->status = 'refunded'; // Or 'partially_refunded'
+                    $payment->status = Payment::STATUS_REFUNDED;
                     $payment->save();
 
-                    // Adjust the total paid on the shoot
+                    // Update shoot payment status
                     $shoot = $payment->shoot;
-                    $shoot->total_paid -= ($refund->getAmountMoney()->getAmount() / 100);
-                    $shoot->save();
+                    if ($shoot->remaining_balance > 0) {
+                        $shoot->payment_status = $shoot->total_paid > 0 ? 'partial' : 'unpaid';
+                        $shoot->save();
+                    }
                 }
                 
                 Log::info("Refund processed for payment ID: {$paymentId}");

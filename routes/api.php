@@ -49,6 +49,15 @@ Route::post('webhooks/square', [PaymentController::class, 'handleWebhook'])
     ->middleware('square.webhook') // Verifies the request is genuinely from Square
     ->name('webhooks.square');
 
+// Test endpoints (remove in production)
+Route::get('test/dropbox-config', [App\Http\Controllers\TestDropboxController::class, 'debugConfig']);
+Route::get('test/dropbox-curl', [App\Http\Controllers\TestDropboxController::class, 'testWithCurl']);
+Route::get('test/dropbox-connection', [App\Http\Controllers\TestDropboxController::class, 'testConnection']);
+Route::get('test/dropbox-folder', [App\Http\Controllers\TestDropboxController::class, 'testFolderCreation']);
+Route::get('test/folder-structure', [App\Http\Controllers\TestDropboxController::class, 'testFolderStructure']);
+Route::get('test/create-shoot', [App\Http\Controllers\TestDropboxController::class, 'createTestShoot']);
+Route::post('test/create-shoot-api', [App\Http\Controllers\TestDropboxController::class, 'createTestShootViaAPI']);
+
 // Group of routes that require user authentication (e.g., using Sanctum)
 Route::middleware('auth:sanctum')->group(function () {
     
@@ -89,8 +98,21 @@ Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function ()
 });
 
 Route::middleware('auth:sanctum')->group(function () {
+    // Shoot management
     Route::get('/shoots', [ShootController::class, 'index']);
     Route::post('/shoots', [ShootController::class, 'store']);
+    Route::get('/shoots/{shoot}', [ShootController::class, 'show']);
+    
+    // File workflow endpoints
+    Route::post('/shoots/{shoot}/upload', [ShootController::class, 'uploadFiles']);
+    Route::post('/shoots/{shoot}/files/{file}/move-to-completed', [ShootController::class, 'moveFileToCompleted']);
+    Route::post('/shoots/{shoot}/files/{file}/verify', [ShootController::class, 'verifyFile']);
+    Route::get('/shoots/{shoot}/workflow-status', [ShootController::class, 'getWorkflowStatus']);
+    
+    // Enhanced file upload endpoints
+    Route::post('/shoots/{shoot}/upload-from-pc', [App\Http\Controllers\FileUploadController::class, 'uploadFromPC']);
+    Route::post('/shoots/{shoot}/copy-from-dropbox', [App\Http\Controllers\FileUploadController::class, 'copyFromDropbox']);
+    Route::get('/dropbox/browse', [App\Http\Controllers\FileUploadController::class, 'listDropboxFiles']);
 });
 
 Route::get('/services', [ServiceController::class, 'index']);
@@ -135,5 +157,3 @@ Route::prefix('photographer/availability')->group(function () {
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/photographer/shoots', [PhotographerShootController::class, 'index']);
 });
-
-Route::middleware('auth:sanctum')->post('/shoots/{shoot}/upload', [ShootController::class, 'uploadFiles'])->name('shoots.upload');
