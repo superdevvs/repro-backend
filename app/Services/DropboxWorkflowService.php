@@ -11,20 +11,33 @@ use Illuminate\Http\UploadedFile;
 
 class DropboxWorkflowService
 {
-    protected $accessToken;
+    protected $tokenService;
     protected $dropboxApiUrl = 'https://api.dropboxapi.com/2';
     protected $dropboxContentUrl = 'https://content.dropboxapi.com/2';
     protected $httpOptions;
 
-    public function __construct()
+    public function __construct(DropboxTokenService $tokenService = null)
     {
-        $this->accessToken = config('services.dropbox.access_token');
+        $this->tokenService = $tokenService ?: new DropboxTokenService();
         
         // Configure HTTP options for development environment
         $this->httpOptions = [
             'verify' => config('app.env') === 'production' ? true : false,
             'timeout' => 60,
         ];
+    }
+
+    /**
+     * Get a valid access token
+     */
+    protected function getAccessToken()
+    {
+        try {
+            return $this->tokenService->getValidAccessToken();
+        } catch (\Exception $e) {
+            Log::error('Failed to get valid Dropbox access token', ['error' => $e->getMessage()]);
+            throw new \Exception('Dropbox authentication failed. Please check your token configuration.');
+        }
     }
 
     /**
@@ -131,7 +144,7 @@ class DropboxWorkflowService
                 'mute' => false,
             ]);
 
-            $response = Http::withToken($this->accessToken)
+            $response = Http::withToken($this\->getAccessToken())
                 ->withOptions($this->httpOptions)
                 ->withBody($fileContent, 'application/octet-stream')
                 ->withHeaders(['Dropbox-API-Arg' => $apiArgs])
@@ -198,7 +211,7 @@ class DropboxWorkflowService
         $newPath = $completedFolder->dropbox_path . '/' . $shootFile->stored_filename;
 
         try {
-            $response = Http::withToken($this->accessToken)
+            $response = Http::withToken($this\->getAccessToken())
                 ->withOptions($this->httpOptions)
                 ->post($this->dropboxApiUrl . '/files/move_v2', [
                     'from_path' => $shootFile->dropbox_path,
@@ -272,7 +285,7 @@ class DropboxWorkflowService
         try {
             $apiArgs = json_encode(['path' => $dropboxPath]);
 
-            $response = Http::withToken($this->accessToken)
+            $response = Http::withToken($this\->getAccessToken())
                 ->withOptions($this->httpOptions)
                 ->withHeaders(['Dropbox-API-Arg' => $apiArgs])
                 ->get($this->dropboxContentUrl . '/files/download');
@@ -307,7 +320,7 @@ class DropboxWorkflowService
     public function listFolderFiles($folderPath)
     {
         try {
-            $response = Http::withToken($this->accessToken)
+            $response = Http::withToken($this\->getAccessToken())
                 ->withOptions($this->httpOptions)
                 ->post($this->dropboxApiUrl . '/files/list_folder', [
                     'path' => $folderPath,
@@ -403,7 +416,7 @@ class DropboxWorkflowService
     private function createFolderIfNotExists($path)
     {
         try {
-            $response = Http::withToken($this->accessToken)
+            $response = Http::withToken($this\->getAccessToken())
                 ->withOptions($this->httpOptions)
                 ->withHeaders(['Content-Type' => 'application/json'])
                 ->withBody(json_encode(['path' => $path, 'autorename' => false]))
@@ -489,7 +502,7 @@ class DropboxWorkflowService
                 'mute' => false,
             ]);
 
-            $response = Http::withToken($this->accessToken)
+            $response = Http::withToken($this\->getAccessToken())
                 ->withOptions($this->httpOptions)
                 ->withBody($fileContent, 'application/octet-stream')
                 ->withHeaders(['Dropbox-API-Arg' => $apiArgs])
@@ -567,7 +580,7 @@ class DropboxWorkflowService
 
         try {
             // Copy file within Dropbox
-            $response = Http::withToken($this->accessToken)
+            $response = Http::withToken($this\->getAccessToken())
                 ->withOptions($this->httpOptions)
                 ->withHeaders(['Content-Type' => 'application/json'])
                 ->withBody(json_encode([
@@ -582,7 +595,7 @@ class DropboxWorkflowService
                 $fileData = $response->json();
                 
                 // Get file metadata to determine size and type
-                $metadataResponse = Http::withToken($this->accessToken)
+                $metadataResponse = Http::withToken($this\->getAccessToken())
                     ->withOptions($this->httpOptions)
                     ->withHeaders(['Content-Type' => 'application/json'])
                     ->withBody(json_encode(['path' => $destinationPath]))
@@ -666,7 +679,7 @@ class DropboxWorkflowService
     private function deleteFromDropbox($path)
     {
         try {
-            $response = Http::withToken($this->accessToken)
+            $response = Http::withToken($this\->getAccessToken())
                 ->withOptions($this->httpOptions)
                 ->withHeaders(['Content-Type' => 'application/json'])
                 ->withBody(json_encode(['path' => $path]))

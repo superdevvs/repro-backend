@@ -7,11 +7,17 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
-use App\Mail\AccountCreatedMail;
-use Illuminate\Support\Facades\Mail;
+use App\Services\MailService;
 
 class AuthController extends Controller
 {
+    protected $mailService;
+
+    public function __construct(MailService $mailService)
+    {
+        $this->mailService = $mailService;
+    }
+
     public function register(Request $request)
     {
         $validated = $request->validate([
@@ -41,7 +47,9 @@ class AuthController extends Controller
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        Mail::to($user->email)->send(new AccountCreatedMail($user));
+        // Send account created email
+        $resetLink = $this->mailService->generatePasswordResetLink($user);
+        $this->mailService->sendAccountCreatedEmail($user, $resetLink);
 
         return response()->json([
             'message' => 'User registered successfully.',

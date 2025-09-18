@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Shoot; // Your Shoot model
 use App\Models\Payment;
+use App\Models\User;
+use App\Services\MailService;
 use Square\SquareClient;
 use Square\Models\CreateCheckoutRequest;
 use Square\Models\CreateOrderRequest;
@@ -19,12 +21,15 @@ use Square\Exceptions\ApiException;
 class PaymentController extends Controller
 {
     protected $squareClient;
+    protected $mailService;
 
     /**
      * Constructor to initialize the Square Client.
      */
-    public function __construct()
+    public function __construct(MailService $mailService)
     {
+        $this->mailService = $mailService;
+        
         // Set up the Square client with credentials from config
         $this->squareClient = new SquareClient([
             'accessToken' => config('services.square.access_token'),
@@ -128,7 +133,7 @@ class PaymentController extends Controller
                     // Prevent duplicate processing
                     if ($shoot && !Payment::where('square_payment_id', $paymentId)->exists()) {
                         // Record the payment in your database
-                        Payment::create([
+                        $payment = Payment::create([
                             'shoot_id' => $shoot->id,
                             'amount' => $amount,
                             'currency' => $currency,
@@ -142,6 +147,12 @@ class PaymentController extends Controller
                         if ($shoot->remaining_balance <= 0) {
                             $shoot->payment_status = 'paid';
                             $shoot->save();
+                        }
+
+                        // Send payment confirmation email
+                        $client = User::find($shoot->client_id);
+                        if ($client) {
+                            $this->mailService->sendPaymentConfirmationEmail($client, $shoot, $payment);
                         }
 
                         Log::info("Payment for Shoot ID {$shootId} processed successfully.");

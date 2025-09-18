@@ -57,6 +57,27 @@ Route::get('test/dropbox-folder', [App\Http\Controllers\TestDropboxController::c
 Route::get('test/folder-structure', [App\Http\Controllers\TestDropboxController::class, 'testFolderStructure']);
 Route::get('test/create-shoot', [App\Http\Controllers\TestDropboxController::class, 'createTestShoot']);
 Route::post('test/create-shoot-api', [App\Http\Controllers\TestDropboxController::class, 'createTestShootViaAPI']);
+Route::get('dropbox/setup-long-lived-token', [App\Http\Controllers\TestDropboxController::class, 'setupLongLivedToken']);
+
+// Address lookup endpoints
+Route::prefix('address')->group(function () {
+    Route::get('search', [App\Http\Controllers\AddressLookupController::class, 'searchAddresses']);
+    Route::get('details', [App\Http\Controllers\AddressLookupController::class, 'getAddressDetails']);
+    Route::post('validate', [App\Http\Controllers\AddressLookupController::class, 'validateAddress']);
+    Route::post('distance', [App\Http\Controllers\AddressLookupController::class, 'calculateDistance']);
+    Route::get('service-area', [App\Http\Controllers\AddressLookupController::class, 'checkServiceArea']);
+    Route::get('nearby-photographers', [App\Http\Controllers\AddressLookupController::class, 'getNearbyPhotographers']);
+});
+
+// Mail test endpoints (remove in production)
+Route::prefix('test/mail')->group(function () {
+    Route::get('config', [App\Http\Controllers\TestMailController::class, 'getMailConfig']);
+    Route::get('account-created', [App\Http\Controllers\TestMailController::class, 'testAccountCreated']);
+    Route::get('shoot-scheduled', [App\Http\Controllers\TestMailController::class, 'testShootScheduled']);
+    Route::get('shoot-ready', [App\Http\Controllers\TestMailController::class, 'testShootReady']);
+    Route::get('payment-confirmation', [App\Http\Controllers\TestMailController::class, 'testPaymentConfirmation']);
+    Route::get('all', [App\Http\Controllers\TestMailController::class, 'testAllEmails']);
+});
 
 // Group of routes that require user authentication (e.g., using Sanctum)
 Route::middleware('auth:sanctum')->group(function () {

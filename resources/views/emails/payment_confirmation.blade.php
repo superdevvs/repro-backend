@@ -13,7 +13,7 @@
 
     <p>
         Location: {{ $shoot->location }} <br>
-        Payment Date: {{ $payment->date }} <br>
+        Payment Date: {{ $payment->created_at }} <br>
         Payment Amount: ${{ number_format($payment->amount, 2) }}
     </p>
 

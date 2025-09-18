@@ -15,13 +15,15 @@ class AccountCreatedMail extends Mailable
     use Queueable, SerializesModels;
 
     public $user;
+    public $resetLink;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(User $user)
+    public function __construct(User $user, string $resetLink)
     {
         $this->user = $user;
+        $this->resetLink = $resetLink;
     }
 
     /**
@@ -43,6 +45,7 @@ class AccountCreatedMail extends Mailable
             view: 'emails.account_created',
             with: [
                 'user' => $this->user,
+                'resetLink' => $this->resetLink,
             ],
         );
     }

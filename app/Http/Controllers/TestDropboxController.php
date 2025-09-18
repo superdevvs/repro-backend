@@ -386,4 +386,32 @@ class TestDropboxController extends Controller
             ]);
         }
     }
+
+    public function setupLongLivedToken()
+    {
+        $clientId = config('services.dropbox.client_id');
+        $redirectUri = config('services.dropbox.redirect');
+        
+        // Create authorization URL for long-lived tokens
+        $authUrl = "https://www.dropbox.com/oauth2/authorize?" . http_build_query([
+            'client_id' => $clientId,
+            'response_type' => 'code',
+            'redirect_uri' => $redirectUri,
+            'token_access_type' => 'offline', // This requests a refresh token
+            'scope' => 'files.content.write files.content.read files.metadata.write files.metadata.read'
+        ]);
+
+        return response()->json([
+            'message' => 'To get long-lived tokens that never expire, follow these steps:',
+            'steps' => [
+                '1. Visit the authorization URL below',
+                '2. Authorize your app',
+                '3. Copy the authorization code from the callback',
+                '4. Use the /api/dropbox/exchange-code endpoint with the code'
+            ],
+            'authorization_url' => $authUrl,
+            'callback_url' => $redirectUri,
+            'note' => 'After authorization, you will get both access_token and refresh_token that can be used indefinitely'
+        ]);
+    }
 }

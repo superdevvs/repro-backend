@@ -29,6 +29,7 @@ return [
         'client_secret' => env('DROPBOX_CLIENT_SECRET'),
         'redirect' => env('APP_URL') . '/api/dropbox/callback',
         'access_token' => env('DROPBOX_ACCESS_TOKEN'),
+        'refresh_token' => env('DROPBOX_REFRESH_TOKEN'),
     ],
 
     'square' => [
@@ -36,6 +37,11 @@ return [
         'location_id' => env('SQUARE_LOCATION_ID'),
         'environment' => env('SQUARE_ENVIRONMENT', 'sandbox'),
         'currency' => env('SQUARE_CURRENCY', 'USD'),
+    ],
+
+    'google' => [
+        'places_api_key' => env('GOOGLE_PLACES_API_KEY'),
+        'maps_api_key' => env('GOOGLE_MAPS_API_KEY'),
     ],
 
     'resend' => [

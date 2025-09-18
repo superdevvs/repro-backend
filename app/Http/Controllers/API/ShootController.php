@@ -6,17 +6,21 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Shoot;
 use App\Models\ShootFile;
+use App\Models\User;
 use App\Services\DropboxWorkflowService;
+use App\Services\MailService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 
 class ShootController extends Controller
 {
     protected $dropboxService;
+    protected $mailService;
 
-    public function __construct(DropboxWorkflowService $dropboxService)
+    public function __construct(DropboxWorkflowService $dropboxService, MailService $mailService)
     {
         $this->dropboxService = $dropboxService;
+        $this->mailService = $mailService;
     }
 
     public function index()
@@ -92,6 +96,13 @@ class ShootController extends Controller
                     'scheduled_date' => $shoot->scheduled_date->toDateString()
                 ]
             ]);
+
+            // Send shoot scheduled email to client
+            $client = User::find($shoot->client_id);
+            if ($client) {
+                $paymentLink = $this->mailService->generatePaymentLink($shoot);
+                $this->mailService->sendShootScheduledEmail($client, $shoot, $paymentLink);
+            }
 
             DB::commit();
             return response()->json(['message' => 'Shoot created successfully', 'data' => $shoot], 201);
@@ -225,6 +236,12 @@ class ShootController extends Controller
             $unverifiedFiles = $shoot->files()->where('workflow_stage', '!=', ShootFile::STAGE_VERIFIED)->count();
             if ($unverifiedFiles === 0 && $shoot->workflow_status === Shoot::WORKFLOW_EDITING_COMPLETE) {
                 $shoot->updateWorkflowStatus(Shoot::WORKFLOW_ADMIN_VERIFIED, auth()->id());
+                
+                // Send shoot ready email to client
+                $client = User::find($shoot->client_id);
+                if ($client) {
+                    $this->mailService->sendShootReadyEmail($client, $shoot);
+                }
             }
 
             DB::commit();
