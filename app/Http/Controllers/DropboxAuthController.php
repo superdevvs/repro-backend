@@ -39,8 +39,9 @@ class DropboxAuthController extends Controller
     /**
      * Step 1: Redirect the user to Dropbox's authorization page.
      */
-    public function connect()
+    public function connect(Request $request)
     {
+        $state = $request->query('debug') ? 'debug' : null;
         $params = [
             'client_id' => $this->clientId,
             'response_type' => 'code',
@@ -48,6 +49,10 @@ class DropboxAuthController extends Controller
             'token_access_type' => 'offline', // Important to get a refresh token
             'scope' => 'files.content.write files.content.read account_info.read', // Request necessary permissions
         ];
+
+        if ($state) {
+            $params['state'] = $state;
+        }
 
         $authUrl = 'https://www.dropbox.com/oauth2/authorize?' . http_build_query($params);
 
@@ -94,9 +99,28 @@ class DropboxAuthController extends Controller
             //     'dropbox_token_expires_at' => now()->addSeconds($tokenData['expires_in']),
             // ]);
 
-            Log::info('Dropbox account linked successfully for account_id: ' . $tokenData['account_id']);
+            Log::info('Dropbox account linked successfully for account_id: ' . ($tokenData['account_id'] ?? 'unknown'));
 
-            // Redirect user to a success page
+            // If state=debug, return tokens as JSON to help set .env locally
+            if ($request->input('state') === 'debug' || config('app.env') === 'local') {
+                // Mask the access token in logs but return full values in response for setup
+                return response()->json([
+                    'message' => 'Dropbox OAuth successful. Copy the following into your .env',
+                    'env_keys' => [
+                        'DROPBOX_CLIENT_ID' => config('services.dropbox.client_id'),
+                        'DROPBOX_CLIENT_SECRET' => substr(config('services.dropbox.client_secret'), 0, 4) . '...hidden',
+                        'DROPBOX_ACCESS_TOKEN' => $tokenData['access_token'] ?? null,
+                        'DROPBOX_REFRESH_TOKEN' => $tokenData['refresh_token'] ?? null,
+                    ],
+                    'notes' => [
+                        'Set DROPBOX_CLIENT_ID and DROPBOX_CLIENT_SECRET from your Dropbox app.',
+                        'Paste DROPBOX_REFRESH_TOKEN to enable auto-refresh of access tokens.',
+                        'Paste DROPBOX_ACCESS_TOKEN as an initial token; it will refresh automatically when expired.'
+                    ]
+                ]);
+            }
+
+            // Default: redirect user
             return redirect('/dashboard')->with('success', 'Dropbox account connected!');
 
         } catch (\Exception $e) {

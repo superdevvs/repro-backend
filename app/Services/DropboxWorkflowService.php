@@ -45,20 +45,18 @@ class DropboxWorkflowService
      */
     public function createShootFolders(Shoot $shoot)
     {
-        $dateFolder = $shoot->scheduled_date->format('Y-m-d');
+        // Use dd-mm-YYYY as requested; if no date yet, fallback to today's date
+        $dateFolder = ($shoot->scheduled_date ? $shoot->scheduled_date : now())->format('d-m-Y');
         $addressFolder = $this->generateAddressFolderName($shoot);
-        
-        // Determine service categories to create folders for
-        $serviceCategories = $this->getServiceCategories($shoot);
         
         $basePath = "/RealEstatePhotos";
         
         // Create base RealEstatePhotos folder
         $this->createFolderIfNotExists($basePath);
         
-        // Create ToDo and Completed base folders with test markers
-        $todoBasePath = "{$basePath}/ToDoTest1";
-        $completedBasePath = "{$basePath}/CompletedTest1";
+        // Create ToDo and Completed base folders
+        $todoBasePath = "{$basePath}/ToDo";
+        $completedBasePath = "{$basePath}/Completed";
         
         $this->createFolderIfNotExists($todoBasePath);
         $this->createFolderIfNotExists($completedBasePath);
@@ -70,34 +68,30 @@ class DropboxWorkflowService
         $this->createFolderIfNotExists($todoDatePath);
         $this->createFolderIfNotExists($completedDatePath);
         
-        // Create category-specific folders for each service type
-        foreach ($serviceCategories as $category) {
-            $categoryFolderName = $this->getCategoryPrefix($category) . '-' . $addressFolder;
-            
-            $todoPath = "{$todoDatePath}/{$categoryFolderName}";
-            $completedPath = "{$completedDatePath}/{$categoryFolderName}";
-            
-            // Create ToDo category folder
-            if ($this->createFolderIfNotExists($todoPath)) {
-                DropboxFolder::create([
-                    'shoot_id' => $shoot->id,
-                    'folder_type' => DropboxFolder::TYPE_TODO,
-                    'service_category' => $category,
-                    'dropbox_path' => $todoPath,
-                    'dropbox_folder_id' => null
-                ]);
-            }
-            
-            // Create Completed category folder
-            if ($this->createFolderIfNotExists($completedPath)) {
-                DropboxFolder::create([
-                    'shoot_id' => $shoot->id,
-                    'folder_type' => DropboxFolder::TYPE_COMPLETED,
-                    'service_category' => $category,
-                    'dropbox_path' => $completedPath,
-                    'dropbox_folder_id' => null
-                ]);
-            }
+        // Create address folder under the date inside ToDo and Completed.
+        $addressOnlyFolderName = $addressFolder;
+
+        $todoPath = "{$todoDatePath}/{$addressOnlyFolderName}";
+        $completedPath = "{$completedDatePath}/{$addressOnlyFolderName}";
+
+        // Create ToDo folder record
+        if ($this->createFolderIfNotExists($todoPath)) {
+            DropboxFolder::create([
+                'shoot_id' => $shoot->id,
+                'folder_type' => DropboxFolder::TYPE_TODO,
+                'dropbox_path' => $todoPath,
+                'dropbox_folder_id' => null
+            ]);
+        }
+
+        // Create Completed folder record
+        if ($this->createFolderIfNotExists($completedPath)) {
+            DropboxFolder::create([
+                'shoot_id' => $shoot->id,
+                'folder_type' => DropboxFolder::TYPE_COMPLETED,
+                'dropbox_path' => $completedPath,
+                'dropbox_folder_id' => null
+            ]);
         }
         
         // Note: Final files will be stored on server only, no Dropbox final folder needed
@@ -108,22 +102,15 @@ class DropboxWorkflowService
      */
     public function uploadToTodo(Shoot $shoot, UploadedFile $file, $userId, $serviceCategory = null)
     {
-        // Determine service category if not provided
-        if (!$serviceCategory) {
-            $serviceCategories = $this->getServiceCategories($shoot);
-            $serviceCategory = $serviceCategories[0]; // Use first category as default
-        }
-        
+        // Find (or create) the ToDo folder for this shoot
         $todoFolder = $shoot->dropboxFolders()
             ->where('folder_type', DropboxFolder::TYPE_TODO)
-            ->where('service_category', $serviceCategory)
             ->first();
         
         if (!$todoFolder) {
             $this->createShootFolders($shoot);
             $todoFolder = $shoot->dropboxFolders()
                 ->where('folder_type', DropboxFolder::TYPE_TODO)
-                ->where('service_category', $serviceCategory)
                 ->first();
         }
 
@@ -196,12 +183,9 @@ class DropboxWorkflowService
     {
         $shoot = $shootFile->shoot;
         
-        // Determine the service category from the file's current path
-        $serviceCategory = $this->getServiceCategoryFromPath($shootFile->dropbox_path, $shoot);
-        
+        // Locate the Completed folder for this shoot
         $completedFolder = $shoot->dropboxFolders()
             ->where('folder_type', DropboxFolder::TYPE_COMPLETED)
-            ->where('service_category', $serviceCategory)
             ->first();
         
         if (!$completedFolder) {
@@ -466,22 +450,15 @@ class DropboxWorkflowService
      */
     public function uploadToCompleted(Shoot $shoot, UploadedFile $file, $userId, $serviceCategory = null)
     {
-        // Determine service category if not provided
-        if (!$serviceCategory) {
-            $serviceCategories = $this->getServiceCategories($shoot);
-            $serviceCategory = $serviceCategories[0];
-        }
-        
+        // Find (or create) the Completed folder for this shoot
         $completedFolder = $shoot->dropboxFolders()
             ->where('folder_type', DropboxFolder::TYPE_COMPLETED)
-            ->where('service_category', $serviceCategory)
             ->first();
         
         if (!$completedFolder) {
             $this->createShootFolders($shoot);
             $completedFolder = $shoot->dropboxFolders()
                 ->where('folder_type', DropboxFolder::TYPE_COMPLETED)
-                ->where('service_category', $serviceCategory)
                 ->first();
         }
 
@@ -552,22 +529,15 @@ class DropboxWorkflowService
      */
     public function copyFromDropboxToTodo(Shoot $shoot, $sourcePath, $filename, $userId, $serviceCategory = null)
     {
-        // Determine service category if not provided
-        if (!$serviceCategory) {
-            $serviceCategories = $this->getServiceCategories($shoot);
-            $serviceCategory = $serviceCategories[0];
-        }
-        
+        // Find (or create) the ToDo folder for this shoot
         $todoFolder = $shoot->dropboxFolders()
             ->where('folder_type', DropboxFolder::TYPE_TODO)
-            ->where('service_category', $serviceCategory)
             ->first();
         
         if (!$todoFolder) {
             $this->createShootFolders($shoot);
             $todoFolder = $shoot->dropboxFolders()
                 ->where('folder_type', DropboxFolder::TYPE_TODO)
-                ->where('service_category', $serviceCategory)
                 ->first();
         }
 

@@ -60,8 +60,8 @@ class ShootController extends Controller
             'city' => 'required|string',
             'state' => 'required|string',
             'zip' => 'required|string',
-            'scheduled_date' => 'required|date',
-            'time' => 'required|string',
+            'scheduled_date' => 'nullable|date',
+            'time' => 'nullable|string',
             'base_quote' => 'required|numeric',
             'tax_amount' => 'required|numeric',
             'total_quote' => 'required|numeric',
@@ -75,15 +75,20 @@ class ShootController extends Controller
 
         // Set default values for optional fields and normalize status values
         $validated['payment_status'] = $this->normalizePaymentStatus($validated['payment_status'] ?? 'unpaid');
-        $validated['status'] = $this->normalizeStatus($validated['status'] ?? 'booked');
+        // Compute shoot status: scheduled if both date and time provided, else on_hold
+        $hasDate = !empty($validated['scheduled_date']);
+        $hasTime = !empty($validated['time']);
+        $validated['status'] = ($hasDate && $hasTime) ? 'scheduled' : 'on_hold';
         $validated['created_by'] = $validated['created_by'] ?? auth()->user()->name ?? 'System';
 
         DB::beginTransaction();
         try {
             $shoot = Shoot::create($validated);
-            
-            // Create Dropbox folder structure
-            $this->dropboxService->createShootFolders($shoot);
+
+            // Create Dropbox folders only when a date/time is set (scheduled)
+            if ($hasDate && $hasTime) {
+                $this->dropboxService->createShootFolders($shoot);
+            }
             
             // Log the creation
             $shoot->workflowLogs()->create([
@@ -97,11 +102,13 @@ class ShootController extends Controller
                 ]
             ]);
 
-            // Send shoot scheduled email to client
-            $client = User::find($shoot->client_id);
-            if ($client) {
-                $paymentLink = $this->mailService->generatePaymentLink($shoot);
-                $this->mailService->sendShootScheduledEmail($client, $shoot, $paymentLink);
+            // Send shoot scheduled email to client only if scheduled
+            if ($shoot->status === 'scheduled') {
+                $client = User::find($shoot->client_id);
+                if ($client) {
+                    $paymentLink = $this->mailService->generatePaymentLink($shoot);
+                    $this->mailService->sendShootScheduledEmail($client, $shoot, $paymentLink);
+                }
             }
 
             DB::commit();
