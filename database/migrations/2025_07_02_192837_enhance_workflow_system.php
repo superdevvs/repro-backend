@@ -1,4 +1,6 @@
 <?php
+// Note: renamed to run after create_shoots_table to satisfy FKs and alters
+// Renamed again to run after create_shoot_files_table (2025_07_02_192836)
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
