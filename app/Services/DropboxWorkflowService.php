@@ -8,6 +8,7 @@ use App\Models\DropboxFolder;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 class DropboxWorkflowService
 {
@@ -115,7 +116,10 @@ class DropboxWorkflowService
         }
 
         if (!$todoFolder) {
-            throw new \Exception("ToDo folder not found for category: {$serviceCategory}");
+            Log::warning('ToDo Dropbox folder not found, falling back to local storage', [
+                'shoot_id' => $shoot->id,
+            ]);
+            return $this->storeLocally($shoot, $file, $userId, ShootFile::STAGE_TODO);
         }
 
         $filename = 'TODO_' . time() . '_' . $file->getClientOriginalName();
@@ -167,13 +171,55 @@ class DropboxWorkflowService
 
                 return $shootFile;
             } else {
-                Log::error("Failed to upload file to Dropbox", $response->json() ?: []);
-                throw new \Exception('Failed to upload file to Dropbox');
+                Log::error("Failed to upload file to Dropbox, falling back to local", $response->json() ?: []);
+                return $this->storeLocally($shoot, $file, $userId, ShootFile::STAGE_TODO);
             }
         } catch (\Exception $e) {
-            Log::error("Exception uploading file to Dropbox", ['error' => $e->getMessage()]);
-            throw $e;
+            Log::error("Exception uploading file to Dropbox, falling back to local", ['error' => $e->getMessage()]);
+            return $this->storeLocally($shoot, $file, $userId, ShootFile::STAGE_TODO);
         }
+    }
+
+    /**
+     * Store file on local public storage as a fallback when Dropbox fails
+     */
+    private function storeLocally(Shoot $shoot, UploadedFile $file, $userId, string $stage): ShootFile
+    {
+        $prefix = $stage === ShootFile::STAGE_COMPLETED ? 'LOCAL_COMPLETED_' : 'LOCAL_TODO_';
+        $filename = $prefix . time() . '_' . $file->getClientOriginalName();
+        $dir = "shoots/{$shoot->id}/" . ($stage === ShootFile::STAGE_COMPLETED ? 'completed' : 'todo');
+        $serverPath = $dir . '/' . $filename;
+
+        Storage::disk('public')->putFileAs($dir, $file, $filename);
+
+        $shootFile = ShootFile::create([
+            'shoot_id' => $shoot->id,
+            'filename' => $file->getClientOriginalName(),
+            'stored_filename' => $filename,
+            'path' => $serverPath,
+            'file_type' => $file->getMimeType(),
+            'file_size' => $file->getSize(),
+            'uploaded_by' => $userId,
+            'workflow_stage' => $stage,
+            'dropbox_path' => null,
+            'dropbox_file_id' => null,
+        ]);
+
+        if ($stage === ShootFile::STAGE_TODO && $shoot->workflow_status === Shoot::WORKFLOW_BOOKED) {
+            $shoot->updateWorkflowStatus(Shoot::WORKFLOW_PHOTOS_UPLOADED, $userId);
+        }
+        if ($stage === ShootFile::STAGE_COMPLETED && $shoot->workflow_status === Shoot::WORKFLOW_BOOKED) {
+            $shoot->updateWorkflowStatus(Shoot::WORKFLOW_EDITING_COMPLETE, $userId);
+        }
+
+        Log::info('Stored file locally as Dropbox fallback', [
+            'shoot_id' => $shoot->id,
+            'filename' => $filename,
+            'path' => $serverPath,
+            'stage' => $stage,
+        ]);
+
+        return $shootFile;
     }
 
     /**
@@ -189,7 +235,10 @@ class DropboxWorkflowService
             ->first();
         
         if (!$completedFolder) {
-            throw new \Exception("Completed folder not found for category: {$serviceCategory}");
+            Log::warning('Completed Dropbox folder not found, falling back to local storage', [
+                'shoot_id' => $shoot->id,
+            ]);
+            return $this->storeLocally($shoot, $file, $userId, ShootFile::STAGE_COMPLETED);
         }
 
         $newPath = $completedFolder->dropbox_path . '/' . $shootFile->stored_filename;
@@ -515,12 +564,12 @@ class DropboxWorkflowService
 
                 return $shootFile;
             } else {
-                Log::error("Failed to upload file to Dropbox Completed folder", $response->json() ?: []);
-                throw new \Exception('Failed to upload file to Dropbox');
+                Log::error("Failed to upload file to Dropbox Completed folder, falling back to local", $response->json() ?: []);
+                return $this->storeLocally($shoot, $file, $userId, ShootFile::STAGE_COMPLETED);
             }
         } catch (\Exception $e) {
-            Log::error("Exception uploading file to Dropbox Completed folder", ['error' => $e->getMessage()]);
-            throw $e;
+            Log::error("Exception uploading file to Dropbox Completed folder, falling back to local", ['error' => $e->getMessage()]);
+            return $this->storeLocally($shoot, $file, $userId, ShootFile::STAGE_COMPLETED);
         }
     }
 

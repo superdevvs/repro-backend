@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use App\Models\OauthToken;
 
 class DropboxTokenService
 {
@@ -22,7 +23,9 @@ class DropboxTokenService
      */
     public function getValidAccessToken()
     {
-        $accessToken = config('services.dropbox.access_token');
+        // Prefer DB-stored token
+        $record = OauthToken::where('provider', 'dropbox')->first();
+        $accessToken = $record?->access_token ?: config('services.dropbox.access_token');
         
         // Check if token is still valid
         if ($this->isTokenValid($accessToken)) {
@@ -30,7 +33,7 @@ class DropboxTokenService
         }
 
         // Try to refresh the token
-        $refreshToken = config('services.dropbox.refresh_token');
+        $refreshToken = $record?->refresh_token ?: config('services.dropbox.refresh_token');
         if ($refreshToken) {
             $newToken = $this->refreshAccessToken($refreshToken);
             if ($newToken) {
@@ -99,6 +102,16 @@ class DropboxTokenService
                 Cache::forget('dropbox_token_valid_' . substr($newAccessToken, 0, 10));
 
                 Log::info('Dropbox access token refreshed successfully');
+
+                // Persist to DB so it survives restarts
+                OauthToken::updateOrCreate(
+                    ['provider' => 'dropbox'],
+                    [
+                        'access_token' => $newAccessToken,
+                        'refresh_token' => $tokenData['refresh_token'] ?? $refreshToken,
+                        'expires_at' => isset($tokenData['expires_in']) ? now()->addSeconds((int)$tokenData['expires_in']) : null,
+                    ]
+                );
                 
                 return $newAccessToken;
             } else {

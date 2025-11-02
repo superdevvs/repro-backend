@@ -108,7 +108,9 @@ Route::middleware(['auth:sanctum'])->post('/admin/users', [UserController::class
 
 Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->get('/admin/clients', [UserController::class, 'getClients']);
 
-Route::middleware(['auth:sanctum', 'role:admin,super_admin,client'])->get('/admin/photographers', [UserController::class, 'getPhotographers']);
+Route::middleware(['auth:sanctum', 'role:admin,super_admin,client,superadmin'])->get('/admin/photographers', [UserController::class, 'getPhotographers']);
+// Public lightweight list for dropdowns
+Route::get('/photographers', [UserController::class, 'simplePhotographers']);
 
 Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function () {
     Route::post('/admin/services', [ServiceController::class, 'store']);
@@ -123,6 +125,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/shoots', [ShootController::class, 'index']);
     Route::post('/shoots', [ShootController::class, 'store']);
     Route::get('/shoots/{shoot}', [ShootController::class, 'show']);
+    Route::patch('/shoots/{shoot}/notes', [ShootController::class, 'updateNotesSimple']);
     
     // File workflow endpoints
     Route::post('/shoots/{shoot}/upload', [ShootController::class, 'uploadFiles']);

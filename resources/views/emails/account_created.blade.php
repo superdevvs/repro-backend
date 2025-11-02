@@ -7,7 +7,7 @@
 <body>
     <p>Subject: R/E Pro Photos New Account Information</p>
 
-    <p>Hello, {{ $user->firstname }} !</p>
+    <p>Hello, {{ $user->name }}!</p>
 
     <p>
         A new account has been created on the R/E Pro Photos client website: 
@@ -24,9 +24,9 @@
     <p>For future reference, the information you have submitted to create your account is listed below:</p>
 
     <p>
-        Name: {{ $user->firstname }} {{ $user->lastname }}<br>
-        Company: {{ $user->company ?? '' }}<br>
-        Phone: {{ $user->phone ?? 'N/A' }}<br>
+        Name: {{ $user->name }}<br>
+        Company: {{ $user->company_name ?? '' }}<br>
+        Phone: {{ $user->phonenumber ?? 'N/A' }}<br>
         Email: {{ $user->email }}
     </p>
 

@@ -13,7 +13,7 @@ class CreateShootsTable extends Migration
         Schema::create('shoots', function (Blueprint $table) {
             $table->id();
             $table->foreignId('client_id')->constrained('users')->onDelete('cascade');
-            $table->foreignId('photographer_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('photographer_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('service_id')->constrained('services')->onDelete('cascade');
 
             $table->string('address');
@@ -21,8 +21,8 @@ class CreateShootsTable extends Migration
             $table->string('state');
             $table->string('zip');
 
-            $table->date('scheduled_date');
-            $table->string('time'); // You can use `time` type if always in HH:MM
+            $table->date('scheduled_date')->nullable();
+            $table->string('time')->nullable(); // You can use `time` type if always in HH:MM
 
             $table->decimal('base_quote', 10, 2);
             $table->decimal('tax_amount', 10, 2);
