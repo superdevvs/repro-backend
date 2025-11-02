@@ -74,5 +74,17 @@ class UserController extends Controller
             'data' => $photographers
         ]);
     }
-}
 
+    // Lightweight public list (id + name + email) for UI dropdowns
+    public function simplePhotographers()
+    {
+        $photographers = User::where('role', 'photographer')
+            ->select('id', 'name', 'email')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'data' => $photographers
+        ]);
+    }
+}

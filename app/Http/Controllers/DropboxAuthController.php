@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redirect;
 use Illuminate\Support\Facades\Storage; // To handle file uploads/downloads
 use App\Models\User; // Example: Assuming you have a User model
+use App\Models\OauthToken;
 
 class DropboxAuthController extends Controller
 {
@@ -87,6 +88,16 @@ class DropboxAuthController extends Controller
             }
 
             $tokenData = $response->json();
+
+            // Persist tokens for server-wide Dropbox integration
+            OauthToken::updateOrCreate(
+                ['provider' => 'dropbox'],
+                [
+                    'access_token' => $tokenData['access_token'] ?? null,
+                    'refresh_token' => $tokenData['refresh_token'] ?? null,
+                    'expires_at' => isset($tokenData['expires_in']) ? now()->addSeconds((int)$tokenData['expires_in']) : null,
+                ]
+            );
 
             // **IMPORTANT**: Securely store these tokens in your database
             // associated with the authenticated user.

@@ -109,7 +109,12 @@ class Shoot extends Model
 
     public function canUploadPhotos()
     {
-        return in_array($this->workflow_status, [self::WORKFLOW_BOOKED]);
+        // Allow raw uploads when newly booked/scheduled, and allow additional raw uploads
+        // after initial upload until admin moves the workflow forward.
+        return in_array($this->workflow_status, [
+            self::WORKFLOW_BOOKED,
+            self::WORKFLOW_PHOTOS_UPLOADED,
+        ]);
     }
 
     public function canMoveToCompleted()

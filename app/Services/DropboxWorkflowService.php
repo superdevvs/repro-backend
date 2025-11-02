@@ -122,7 +122,7 @@ class DropboxWorkflowService
             return $this->storeLocally($shoot, $file, $userId, ShootFile::STAGE_TODO);
         }
 
-        $filename = 'TODO_' . time() . '_' . $file->getClientOriginalName();
+        $filename = 'TODO_' . str_replace('.', '_', uniqid('', true)) . '_' . $file->getClientOriginalName();
         $dropboxPath = $todoFolder->dropbox_path . '/' . $filename;
 
         try {
@@ -186,7 +186,7 @@ class DropboxWorkflowService
     private function storeLocally(Shoot $shoot, UploadedFile $file, $userId, string $stage): ShootFile
     {
         $prefix = $stage === ShootFile::STAGE_COMPLETED ? 'LOCAL_COMPLETED_' : 'LOCAL_TODO_';
-        $filename = $prefix . time() . '_' . $file->getClientOriginalName();
+        $filename = $prefix . str_replace('.', '_', uniqid('', true)) . '_' . $file->getClientOriginalName();
         $dir = "shoots/{$shoot->id}/" . ($stage === ShootFile::STAGE_COMPLETED ? 'completed' : 'todo');
         $serverPath = $dir . '/' . $filename;
 
@@ -208,7 +208,7 @@ class DropboxWorkflowService
         if ($stage === ShootFile::STAGE_TODO && $shoot->workflow_status === Shoot::WORKFLOW_BOOKED) {
             $shoot->updateWorkflowStatus(Shoot::WORKFLOW_PHOTOS_UPLOADED, $userId);
         }
-        if ($stage === ShootFile::STAGE_COMPLETED && $shoot->workflow_status === Shoot::WORKFLOW_BOOKED) {
+        if ($stage === ShootFile::STAGE_COMPLETED && in_array($shoot->workflow_status, [Shoot::WORKFLOW_BOOKED, Shoot::WORKFLOW_PHOTOS_UPLOADED])) {
             $shoot->updateWorkflowStatus(Shoot::WORKFLOW_EDITING_COMPLETE, $userId);
         }
 
@@ -235,10 +235,20 @@ class DropboxWorkflowService
             ->first();
         
         if (!$completedFolder) {
-            Log::warning('Completed Dropbox folder not found, falling back to local storage', [
+            // Fallback: mark as completed without Dropbox move, and keep current path
+            Log::warning('Completed Dropbox folder not found, marking file as completed locally', [
                 'shoot_id' => $shoot->id,
+                'file_id' => $shootFile->id,
             ]);
-            return $this->storeLocally($shoot, $file, $userId, ShootFile::STAGE_COMPLETED);
+
+            $shootFile->moveToCompleted($userId);
+
+            // If no remaining TODO files and workflow is PHOTOS_UPLOADED, advance workflow
+            $todoFiles = $shoot->files()->where('workflow_stage', ShootFile::STAGE_TODO)->count();
+            if ($todoFiles === 0 && $shoot->workflow_status === Shoot::WORKFLOW_PHOTOS_UPLOADED) {
+                $shoot->updateWorkflowStatus(Shoot::WORKFLOW_EDITING_COMPLETE, $userId);
+            }
+            return true;
         }
 
         $newPath = $completedFolder->dropbox_path . '/' . $shootFile->stored_filename;
@@ -289,8 +299,21 @@ class DropboxWorkflowService
         $shoot = $shootFile->shoot;
 
         try {
-            // Download file from Dropbox and store on server (but keep in Dropbox)
-            $this->downloadAndStoreOnServer($shootFile, $shootFile->dropbox_path);
+            if (!empty($shootFile->dropbox_path)) {
+                // Download file from Dropbox and store on server (but keep in Dropbox)
+                $this->downloadAndStoreOnServer($shootFile, $shootFile->dropbox_path);
+            } else {
+                // Local fallback: copy existing local file into final directory
+                $serverPath = "shoots/{$shoot->id}/final/{$shootFile->stored_filename}";
+                $currentPath = $shootFile->path; // e.g., shoots/{id}/completed/...
+                if (Storage::disk('public')->exists($currentPath)) {
+                    $contents = Storage::disk('public')->get($currentPath);
+                    Storage::disk('public')->put($serverPath, $contents);
+                    $shootFile->path = $serverPath;
+                } else {
+                    throw new \Exception('Source file missing in local storage');
+                }
+            }
             
             // Update file record - keep dropbox_path but mark as verified
             $shootFile->workflow_stage = ShootFile::STAGE_VERIFIED;
@@ -512,10 +535,15 @@ class DropboxWorkflowService
         }
 
         if (!$completedFolder) {
-            throw new \Exception("Completed folder not found for category: {$serviceCategory}");
+            // Fallback to local storage when Dropbox Completed folder is absent
+            Log::warning('Dropbox Completed folder missing; falling back to local storage for edited upload', [
+                'shoot_id' => $shoot->id,
+                'service_category' => $serviceCategory,
+            ]);
+            return $this->storeLocally($shoot, $file, $userId, ShootFile::STAGE_COMPLETED);
         }
 
-        $filename = 'COMPLETED_' . time() . '_' . $file->getClientOriginalName();
+        $filename = 'COMPLETED_' . str_replace('.', '_', uniqid('', true)) . '_' . $file->getClientOriginalName();
         $dropboxPath = $completedFolder->dropbox_path . '/' . $filename;
 
         try {
@@ -594,7 +622,7 @@ class DropboxWorkflowService
             throw new \Exception("ToDo folder not found for category: {$serviceCategory}");
         }
 
-        $newFilename = 'COPIED_TODO_' . time() . '_' . $filename;
+        $newFilename = 'COPIED_TODO_' . str_replace('.', '_', uniqid('', true)) . '_' . $filename;
         $destinationPath = $todoFolder->dropbox_path . '/' . $newFilename;
 
         try {

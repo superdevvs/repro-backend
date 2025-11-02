@@ -21,17 +21,53 @@ class FileUploadController extends Controller
     /**
      * Upload files from PC to shoot folder
      */
-    public function uploadFromPC(Request $request, $shootId)
+    public function uploadFromPC(Request $request, \App\Models\Shoot $shoot)
     {
         $request->validate([
             'files' => 'required|array',
-            'files.*' => 'required|file|max:102400|mimes:jpeg,jpg,png,gif,mp4,mov,avi,raw,cr2,nef,arw,tiff,bmp', // 100MB max
+            // Allow up to ~1 GiB per file (max in KB), plus common photo/video mimes
+            'files.*' => 'required|file|max:1048576|mimes:jpeg,jpg,png,gif,mp4,mov,avi,raw,cr2,nef,arw,tiff,bmp,heic,heif,zip',
             'service_category' => 'nullable|string|in:P,iGuide,Video',
             'upload_type' => 'nullable|string|in:raw,edited'
         ]);
 
-        $shoot = Shoot::findOrFail($shootId);
+        // Route model binding provides $shoot
         $uploadType = $request->input('upload_type', 'raw');
+        Log::info('uploadFromPC: received request', [
+            'shoot_id' => $shoot->id,
+            'user_id' => auth()->id(),
+            'upload_type' => $uploadType,
+        ]);
+        
+        // Be defensive about uploaded files shape
+        $filesInput = $request->file('files');
+        if ($filesInput instanceof \Illuminate\Http\UploadedFile) {
+            $files = [$filesInput];
+        } elseif (is_array($filesInput)) {
+            $files = $filesInput;
+        } else {
+            // Fallback: attempt to gather from allFiles in case client sent slightly different keys
+            $allFiles = $request->allFiles();
+            $files = [];
+            foreach ($allFiles as $key => $f) {
+                if ($f instanceof \Illuminate\Http\UploadedFile) {
+                    $files[] = $f;
+                } elseif (is_array($f)) {
+                    foreach ($f as $ff) {
+                        if ($ff instanceof \Illuminate\Http\UploadedFile) {
+                            $files[] = $ff;
+                        }
+                    }
+                }
+            }
+        }
+        if (empty($files)) {
+            Log::warning('uploadFromPC: no files received', [ 'shoot_id' => $shoot->id ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'No files received by server',
+            ], 422);
+        }
         
         // Check workflow permissions based on upload type
         if ($uploadType === 'raw' && !$shoot->canUploadPhotos()) {
@@ -46,9 +82,16 @@ class FileUploadController extends Controller
         $errors = [];
 
         try {
-            foreach ($request->file('files') as $file) {
+            foreach ($files as $file) {
                 try {
                     $serviceCategory = $request->input('service_category', 'P');
+                    Log::info('uploadFromPC: processing file', [
+                        'shoot_id' => $shoot->id,
+                        'name' => $file->getClientOriginalName(),
+                        'size' => $file->getSize(),
+                        'type' => $file->getMimeType(),
+                        'upload_type' => $uploadType,
+                    ]);
                     
                     if ($uploadType === 'raw') {
                         // Upload to ToDo folder
@@ -67,6 +110,10 @@ class FileUploadController extends Controller
                         'uploaded_at' => $shootFile->created_at
                     ];
                 } catch (\Exception $e) {
+                    Log::error('uploadFromPC: per-file error', [
+                        'shoot_id' => $shoot->id,
+                        'error' => $e->getMessage(),
+                    ]);
                     $errors[] = [
                         'filename' => $file->getClientOriginalName(),
                         'error' => $e->getMessage()
@@ -84,6 +131,10 @@ class FileUploadController extends Controller
             ]);
 
         } catch (\Exception $e) {
+            Log::error('uploadFromPC: failed', [
+                'shoot_id' => $shoot->id,
+                'error' => $e->getMessage(),
+            ]);
             return response()->json([
                 'success' => false,
                 'message' => 'Upload failed: ' . $e->getMessage()
@@ -190,7 +241,7 @@ class FileUploadController extends Controller
     /**
      * Copy files from user's Dropbox to shoot folder
      */
-    public function copyFromDropbox(Request $request, $shootId)
+    public function copyFromDropbox(Request $request, \App\Models\Shoot $shoot)
     {
         $request->validate([
             'files' => 'required|array',
@@ -199,7 +250,7 @@ class FileUploadController extends Controller
             'service_category' => 'nullable|string|in:P,iGuide,Video'
         ]);
 
-        $shoot = Shoot::findOrFail($shootId);
+        // Route model binding provides $shoot
         
         if (!$shoot->canUploadPhotos()) {
             return response()->json([

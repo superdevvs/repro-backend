@@ -125,6 +125,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/shoots', [ShootController::class, 'index']);
     Route::post('/shoots', [ShootController::class, 'store']);
     Route::get('/shoots/{shoot}', [ShootController::class, 'show']);
+    // Minimal update endpoint for status/workflow updates
+    Route::patch('/shoots/{shoot}', [ShootController::class, 'update']);
     Route::patch('/shoots/{shoot}/notes', [ShootController::class, 'updateNotesSimple']);
     
     // File workflow endpoints
@@ -137,6 +139,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/shoots/{shoot}/upload-from-pc', [App\Http\Controllers\FileUploadController::class, 'uploadFromPC']);
     Route::post('/shoots/{shoot}/copy-from-dropbox', [App\Http\Controllers\FileUploadController::class, 'copyFromDropbox']);
     Route::get('/dropbox/browse', [App\Http\Controllers\FileUploadController::class, 'listDropboxFiles']);
+
+    // Finalize a shoot (admin toggle triggers this)
+    Route::post('/shoots/{shoot}/finalize', [ShootController::class, 'finalize']);
 });
 
 Route::get('/services', [ServiceController::class, 'index']);
@@ -180,4 +185,11 @@ Route::prefix('photographer/availability')->group(function () {
 // routes/api.php
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/photographer/shoots', [PhotographerShootController::class, 'index']);
+});
+
+// Public read-only endpoints for client-facing pages
+Route::prefix('public/shoots')->group(function () {
+    Route::get('{shoot}/branded', [ShootController::class, 'publicBranded']);
+    Route::get('{shoot}/mls', [ShootController::class, 'publicMls']);
+    Route::get('{shoot}/generic-mls', [ShootController::class, 'publicGenericMls']);
 });
