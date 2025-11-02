@@ -20,7 +20,7 @@ Route::get('/user', function (Request $request) {
 Route::get('/ping', function () {
     return response()->json([
         'status' => 'success',
-        'message' => 'API is working'
+        'message' => 'API is working V1'
     ]);
 });
 
