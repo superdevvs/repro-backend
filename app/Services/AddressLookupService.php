@@ -8,12 +8,20 @@ use Illuminate\Support\Facades\Cache;
 
 class AddressLookupService
 {
+    private $provider;
     private $googleApiKey;
-    private $baseUrl = 'https://maps.googleapis.com/maps/api';
+    private $googleBaseUrl = 'https://maps.googleapis.com/maps/api';
+
+    private $locationIqKey;
+    private $locationIqBaseUrl;
 
     public function __construct()
     {
+        $this->provider = config('services.address.provider', 'locationiq');
         $this->googleApiKey = config('services.google.places_api_key');
+
+        $this->locationIqKey = config('services.locationiq.key');
+        $this->locationIqBaseUrl = rtrim(config('services.locationiq.base_url', 'https://us1.locationiq.com/v1'), '/');
     }
 
     /**
@@ -21,111 +29,64 @@ class AddressLookupService
      */
     public function searchAddresses(string $query, array $options = []): array
     {
-        if (empty($this->googleApiKey)) {
-            throw new \Exception('Google Places API key not configured');
-        }
-
         if (strlen($query) < 3) {
             return [];
         }
 
-        // Cache key for the search
-        $cacheKey = 'address_search_' . md5($query . serialize($options));
-        
+        $cacheKey = 'address_search_' . md5($this->provider . '|' . $query . serialize($options));
+
         return Cache::remember($cacheKey, 300, function () use ($query, $options) {
             try {
-                $params = [
-                    'input' => $query,
-                    'key' => $this->googleApiKey,
-                    'types' => 'address',
-                    'components' => 'country:us', // Restrict to US addresses
-                ];
+                if ($this->provider === 'locationiq') {
+                    if (empty($this->locationIqKey)) {
+                        throw new \Exception('LocationIQ API key not configured');
+                    }
 
-                // Add optional parameters
-                if (isset($options['location'])) {
-                    $params['location'] = $options['location'];
-                }
-                if (isset($options['radius'])) {
-                    $params['radius'] = $options['radius'];
+                    // Cleanly call LocationIQ logic
+                    return $this->locationIqAutocomplete($query, $options);
                 }
 
-                $response = Http::get($this->baseUrl . '/place/autocomplete/json', $params);
-
-                if (!$response->successful()) {
-                    Log::error('Google Places API error', [
-                        'status' => $response->status(),
-                        'body' => $response->body()
-                    ]);
-                    return [];
+                // Default to Google
+                if (empty($this->googleApiKey)) {
+                    throw new \Exception('Google Places API key not configured');
                 }
 
-                $data = $response->json();
-
-                if ($data['status'] !== 'OK') {
-                    Log::warning('Google Places API warning', [
-                        'status' => $data['status'],
-                        'error_message' => $data['error_message'] ?? 'Unknown error'
-                    ]);
-                    return [];
-                }
-
-                return $this->formatAddressSuggestions($data['predictions']);
+                return $this->googleAutocomplete($query, $options);
 
             } catch (\Exception $e) {
                 Log::error('Address lookup failed', [
+                    'provider' => $this->provider,
                     'query' => $query,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
                 ]);
                 return [];
             }
         });
     }
 
+
     /**
      * Get detailed address information by place ID
      */
     public function getAddressDetails(string $placeId): ?array
     {
-        if (empty($this->googleApiKey)) {
-            throw new \Exception('Google Places API key not configured');
-        }
-
-        $cacheKey = 'address_details_' . $placeId;
-        
+        $cacheKey = 'address_details_' . $this->provider . '_' . $placeId;
         return Cache::remember($cacheKey, 3600, function () use ($placeId) {
             try {
-                $params = [
-                    'place_id' => $placeId,
-                    'key' => $this->googleApiKey,
-                    'fields' => 'address_components,formatted_address,geometry,name,types'
-                ];
-
-                $response = Http::get($this->baseUrl . '/place/details/json', $params);
-
-                if (!$response->successful()) {
-                    Log::error('Google Places Details API error', [
-                        'place_id' => $placeId,
-                        'status' => $response->status(),
-                        'body' => $response->body()
-                    ]);
-                    return null;
+                if ($this->provider === 'locationiq') {
+                    if (empty($this->locationIqKey)) {
+                        throw new \Exception('LocationIQ API key not configured');
+                    }
+                    return $this->locationIqDetails($placeId);
                 }
 
-                $data = $response->json();
-
-                if ($data['status'] !== 'OK') {
-                    Log::warning('Google Places Details API warning', [
-                        'place_id' => $placeId,
-                        'status' => $data['status'],
-                        'error_message' => $data['error_message'] ?? 'Unknown error'
-                    ]);
-                    return null;
+                if (empty($this->googleApiKey)) {
+                    throw new \Exception('Google Places API key not configured');
                 }
-
-                return $this->parseAddressComponents($data['result']);
-
+                return $this->googleDetails($placeId);
             } catch (\Exception $e) {
                 Log::error('Address details lookup failed', [
+                    'provider' => $this->provider,
                     'place_id' => $placeId,
                     'error' => $e->getMessage()
                 ]);
@@ -272,7 +233,7 @@ class AddressLookupService
                 'units' => 'imperial'
             ];
 
-            $response = Http::get($this->baseUrl . '/distancematrix/json', $params);
+            $response = Http::get($this->googleBaseUrl . '/distancematrix/json', $params);
 
             if (!$response->successful()) {
                 return null;
@@ -303,8 +264,198 @@ class AddressLookupService
                 'destination' => $destination,
                 'error' => $e->getMessage()
             ]);
+            // Fallback: approximate great-circle distance (no routing)
+            return $this->approxDistanceByCoordinates($origin, $destination);
+        }
+    }
+
+    private function googleAutocomplete(string $query, array $options): array
+    {
+        $params = [
+            'input' => $query,
+            'key' => $this->googleApiKey,
+            'types' => 'address',
+            'components' => 'country:us',
+        ];
+        if (isset($options['location'])) $params['location'] = $options['location'];
+        if (isset($options['radius'])) $params['radius'] = $options['radius'];
+
+        $response = Http::get($this->googleBaseUrl . '/place/autocomplete/json', $params);
+        if (!$response->successful()) {
+            Log::error('Google Places API error', ['status' => $response->status(), 'body' => $response->body()]);
+            return [];
+        }
+        $data = $response->json();
+        if (($data['status'] ?? '') !== 'OK') {
+            Log::warning('Google Places API warning', ['status' => $data['status'] ?? 'unknown', 'error_message' => $data['error_message'] ?? null]);
+            return [];
+        }
+        return $this->formatAddressSuggestions($data['predictions'] ?? []);
+    }
+
+    private function googleDetails(string $placeId): ?array
+    {
+        $params = [
+            'place_id' => $placeId,
+            'key' => $this->googleApiKey,
+            'fields' => 'address_components,formatted_address,geometry,name,types'
+        ];
+        $response = Http::get($this->googleBaseUrl . '/place/details/json', $params);
+        if (!$response->successful()) {
+            Log::error('Google Places Details API error', ['place_id' => $placeId, 'status' => $response->status(), 'body' => $response->body()]);
             return null;
         }
+        $data = $response->json();
+        if (($data['status'] ?? '') !== 'OK') {
+            Log::warning('Google Places Details API warning', ['place_id' => $placeId, 'status' => $data['status'] ?? 'unknown', 'error_message' => $data['error_message'] ?? null]);
+            return null;
+        }
+        return $this->parseAddressComponents($data['result'] ?? []);
+    }
+
+    private function locationIqAutocomplete(string $query, array $options): array
+    {
+        $params = [
+            'key' => $this->locationIqKey,
+            'q' => $query,
+            'limit' => 8,
+            'dedupe' => 1,
+            'countrycodes' => 'us',
+            'format' => 'json',
+        ];
+
+        // ✅ Initialize URL before making any request
+        $url = $this->locationIqBaseUrl . '/autocomplete';
+        // $response = Http::get($url, $params);
+        $response = Http::withOptions(['verify' => false])->get($url, $params);
+
+
+        // Fallback if 404
+        if ($response->status() === 404) {
+            $url = $this->locationIqBaseUrl . '/autocomplete.php';
+            $response = Http::get($url, $params);
+        }
+
+        if (!$response->successful()) {
+            Log::error('LocationIQ autocomplete error', [
+                'url' => $url,
+                'params' => $params,
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+            throw new \Exception('LocationIQ autocomplete failed: ' . $response->status());
+        }
+
+        $items = $response->json();
+
+        if (!is_array($items) || empty($items)) {
+            Log::warning('LocationIQ returned empty result', ['url' => $url, 'response' => $response->body()]);
+            return [];
+        }
+
+        return array_map(function ($it) {
+            $display = $it['display_name'] ?? '';
+            $main = $it['address']['house_number'] ?? '';
+            $route = $it['address']['road'] ?? '';
+            $city = $it['address']['city'] ?? ($it['address']['town'] ?? ($it['address']['village'] ?? ''));
+            $state = $it['address']['state'] ?? '';
+            $zip = $it['address']['postcode'] ?? '';
+            $primary = trim(trim($main . ' ' . $route));
+            $secondary = trim(join(', ', array_filter([$city, $state, $zip])));
+            return [
+                'place_id' => (string)($it['place_id'] ?? ''),
+                'description' => $display,
+                'main_text' => $primary ?: ($it['address']['neighbourhood'] ?? $display),
+                'secondary_text' => $secondary,
+                'types' => [$it['class'] ?? 'address'],
+            ];
+        }, $items);
+    }
+
+
+    private function locationIqDetails(string $placeId): ?array
+    {
+        $params = [
+            'key' => $this->locationIqKey,
+            'place_id' => $placeId,
+            'format' => 'json',
+        ];
+
+        $urls = [
+            $this->locationIqBaseUrl . '/lookup',
+            $this->locationIqBaseUrl . '/lookup.php',
+        ];
+
+        $response = null;
+        foreach ($urls as $url) {
+            $response = Http::withOptions(['verify' => false])->get($url, $params);
+            if ($response->successful()) break;
+        }
+
+        if (!$response || !$response->successful()) {
+            Log::error('LocationIQ details lookup failed', [
+                'place_id' => $placeId,
+                'urls' => $urls,
+                'status' => $response ? $response->status() : 'no response',
+                'body' => $response ? $response->body() : null,
+            ]);
+            throw new \Exception('LocationIQ details lookup failed');
+        }
+
+        $data = $response->json();
+        if (isset($data[0])) $data = $data[0];
+        if (!is_array($data)) return null;
+
+        return $this->parseLocationIqAddress($data);
+    }
+
+
+    private function parseLocationIqAddress(array $data): array
+    {
+        $addr = $data['address'] ?? [];
+        $streetNumber = $addr['house_number'] ?? '';
+        $streetName = $addr['road'] ?? ($addr['pedestrian'] ?? ($addr['path'] ?? ''));
+        $address = trim(trim($streetNumber . ' ' . $streetName));
+
+        return [
+            'formatted_address' => $data['display_name'] ?? $address,
+            'address' => $address,
+            'city' => $addr['city'] ?? ($addr['town'] ?? ($addr['village'] ?? ($addr['hamlet'] ?? ''))),
+            'state' => $addr['state'] ?? '',
+            'zip' => $addr['postcode'] ?? '',
+            'country' => $addr['country_code'] ?? '',
+            'latitude' => isset($data['lat']) ? (float)$data['lat'] : null,
+            'longitude' => isset($data['lon']) ? (float)$data['lon'] : null,
+        ];
+    }
+
+    private function approxDistanceByCoordinates(array $origin, array $destination): ?array
+    {
+        // If coordinates exist in arrays, use haversine; otherwise, return null
+        $olat = $origin['latitude'] ?? null;
+        $olon = $origin['longitude'] ?? null;
+        $dlat = $destination['latitude'] ?? null;
+        $dlon = $destination['longitude'] ?? null;
+        if ($olat === null || $olon === null || $dlat === null || $dlon === null) {
+            return null;
+        }
+        $earth = 6371000; // meters
+        $toRad = function ($deg) { return $deg * M_PI / 180; };
+        $dPhi = $toRad($dlat - $olat);
+        $dLam = $toRad($dlon - $olon);
+        $phi1 = $toRad($olat);
+        $phi2 = $toRad($dlat);
+        $a = sin($dPhi/2)**2 + cos($phi1)*cos($phi2)*sin($dLam/2)**2;
+        $c = 2 * atan2(sqrt($a), sqrt(1-$a));
+        $meters = $earth * $c;
+        // Rough driving time assuming 35 mph average (~15.6 m/s)
+        $seconds = $meters / 15.6;
+        return [
+            'distance' => round($meters/1609.34, 2) . ' mi',
+            'distance_value' => (int)$meters,
+            'duration' => gmdate('H\h i\m', (int)$seconds),
+            'duration_value' => (int)$seconds,
+        ];
     }
 
     /**

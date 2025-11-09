@@ -44,6 +44,18 @@ return [
         'maps_api_key' => env('GOOGLE_MAPS_API_KEY'),
     ],
 
+    // LocationIQ (OSM-backed) for address autocomplete/geocoding
+    'locationiq' => [
+        'key' => env('LOCATIONIQ_API_KEY'),
+        'base_url' => env('LOCATIONIQ_BASE_URL', 'https://api.locationiq.com/v1'),
+    ],
+
+    // Address provider selector
+    'address' => [
+        // Supported: locationiq, google
+        'provider' => env('ADDRESS_PROVIDER', 'locationiq'),
+    ],
+
     'resend' => [
         'key' => env('RESEND_KEY'),
     ],

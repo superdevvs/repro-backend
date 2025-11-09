@@ -21,6 +21,11 @@ class AddressLookupController extends Controller
      */
     public function searchAddresses(Request $request): JsonResponse
     {
+        // Accept both 'query' and 'q' as the search term
+        if (!$request->has('query') && $request->has('q')) {
+            $request->merge(['query' => $request->get('q')]);
+        }
+
         $validator = Validator::make($request->all(), [
             'query' => 'required|string|min:3|max:255',
             'location' => 'nullable|string', // lat,lng format
@@ -46,7 +51,7 @@ class AddressLookupController extends Controller
             }
 
             $suggestions = $this->addressService->searchAddresses(
-                $request->query,
+                (string) $request->input('query'),
                 $options
             );
 
@@ -81,7 +86,7 @@ class AddressLookupController extends Controller
         }
 
         try {
-            $details = $this->addressService->getAddressDetails($request->place_id);
+            $details = $this->addressService->getAddressDetails((string) $request->input('place_id'));
 
             if (!$details) {
                 return response()->json([

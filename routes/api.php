@@ -104,6 +104,7 @@ Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logo
 
 Route::middleware('auth:sanctum')->get('/admin/users', [UserController::class, 'index']);
 
+Route::middleware(['auth:sanctum','role:admin,super_admin'])->patch('/admin/users/{id}/role', [UserController::class, 'updateRole']);
 Route::middleware(['auth:sanctum'])->post('/admin/users', [UserController::class, 'store']);
 
 Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->get('/admin/clients', [UserController::class, 'getClients']);
@@ -193,3 +194,9 @@ Route::prefix('public/shoots')->group(function () {
     Route::get('{shoot}/mls', [ShootController::class, 'publicMls']);
     Route::get('{shoot}/generic-mls', [ShootController::class, 'publicGenericMls']);
 });
+
+// Public client profile
+Route::prefix('public')->group(function () {
+    Route::get('/clients/{client}/profile', [ShootController::class, 'publicClientProfile']);
+});
+

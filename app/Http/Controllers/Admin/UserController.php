@@ -34,7 +34,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
-            'username' => 'required|string|unique:users',
+            'username' => 'nullable|string|unique:users',
             'phone_number' => 'nullable|string|max:20',
             'company_name' => 'nullable|string|max:255',
             'role' => 'required|in:super_admin,admin,client,photographer,editor',
@@ -85,6 +85,35 @@ class UserController extends Controller
 
         return response()->json([
             'data' => $photographers
+        ]);
+    }
+
+    /**
+     * Admin-only: update a user's primary role
+     */
+    public function updateRole(Request $request, $id)
+    {
+        $admin = $request->user();
+        if (!$admin || !in_array($admin->role, ['admin', 'super_admin'])) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validated = $request->validate([
+            'role' => 'required|in:super_admin,admin,client,photographer,editor',
+        ]);
+
+        $user = User::findOrFail($id);
+        $oldRole = $user->role;
+        $user->role = $validated['role'];
+        $changed = $user->isDirty('role');
+        $user->save();
+
+        return response()->json([
+            'message' => $changed ? 'Role updated successfully.' : 'Role unchanged.',
+            'changed' => $changed,
+            'user' => $user,
+            'old_role' => $oldRole,
+            'new_role' => $user->role,
         ]);
     }
 }

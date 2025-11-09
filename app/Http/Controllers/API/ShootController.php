@@ -697,4 +697,70 @@ class ShootController extends Controller
         $assets['type'] = 'generic-mls';
         return response()->json($assets);
     }
+
+    /**
+     * Public client profile: basic client info and their shoots with previewable assets.
+     * No auth required so links can be shared.
+     */
+    public function publicClientProfile($clientId)
+    {
+        $client = \App\Models\User::findOrFail($clientId);
+
+        // Only include shoots that have at least one verified (finalized) file
+        $shoots = Shoot::with(['files' => function($q) {
+                $q->where('workflow_stage', \App\Models\ShootFile::STAGE_VERIFIED);
+            }])
+            ->where('client_id', $client->id)
+            ->whereHas('files', function($q) {
+                $q->where('workflow_stage', \App\Models\ShootFile::STAGE_VERIFIED);
+            })
+            ->orderByDesc('scheduled_date')
+            ->get();
+
+        $mapUrl = function($path) {
+            if (!$path) return null;
+            if (preg_match('/^https?:\/\//i', $path)) return $path;
+            $clean = ltrim($path, '/');
+            $publicRelative = str_starts_with($clean, 'storage/') ? substr($clean, 8) : $clean;
+            if (\Storage::disk('public')->exists($publicRelative)) {
+                $url = \Storage::disk('public')->url($publicRelative);
+                if (!preg_match('/^https?:\/\//i', $url)) {
+                    $base = rtrim(config('app.url'), '/');
+                    $url = $base . '/' . ltrim($url, '/');
+                }
+                return $url;
+            }
+            return null;
+        };
+
+        $shootItems = $shoots->map(function ($s) use ($mapUrl) {
+            $files = $s->files ?: collect();
+            // Files are already filtered to verified in eager load, but keep guards
+            $imageFile = $files->first(function ($f) { return str_starts_with(strtolower((string)$f->file_type), 'image/'); });
+            $preview = $imageFile ? ($mapUrl($imageFile->path) ?: $mapUrl($imageFile->dropbox_path)) : null;
+
+            return [
+                'id' => $s->id,
+                'address' => $s->address,
+                'city' => $s->city,
+                'state' => $s->state,
+                'zip' => $s->zip,
+                'scheduled_date' => optional($s->scheduled_date)->toDateString(),
+                'files_count' => $files->count(),
+                'preview_image' => $preview,
+            ];
+        });
+
+        return response()->json([
+            'client' => [
+                'id' => $client->id,
+                'name' => $client->name,
+                'email' => $client->email,
+                'company_name' => $client->company_name,
+                'phonenumber' => $client->phonenumber,
+                'avatar' => $client->avatar,
+            ],
+            'shoots' => $shootItems,
+        ]);
+    }
 }
