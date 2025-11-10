@@ -86,6 +86,11 @@ class Shoot extends Model
         return $this->hasMany(Payment::class);
     }
 
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
+    }
+
     public function dropboxFolders()
     {
         return $this->hasMany(DropboxFolder::class);

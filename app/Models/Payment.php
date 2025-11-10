@@ -11,6 +11,7 @@ class Payment extends Model
 
     protected $fillable = [
         'shoot_id',
+        'invoice_id',
         'amount',
         'currency',
         'square_payment_id',
@@ -33,5 +34,10 @@ class Payment extends Model
     public function shoot()
     {
         return $this->belongsTo(Shoot::class);
+    }
+
+    public function invoice()
+    {
+        return $this->belongsTo(Invoice::class);
     }
 }
