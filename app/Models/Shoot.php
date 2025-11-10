@@ -88,7 +88,7 @@ class Shoot extends Model
 
     public function invoices()
     {
-        return $this->hasMany(Invoice::class);
+        return $this->belongsToMany(Invoice::class, 'invoice_shoot')->withTimestamps();
     }
 
     public function dropboxFolders()

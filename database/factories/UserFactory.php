@@ -31,7 +31,7 @@ class UserFactory extends Factory
             'company_name' => fake()->company(),
             'role' => 'client',
             'avatar' => null,
-            'bio' => null,
+            'bio' => fake()->sentence(),
             'account_status' => 'active',
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
@@ -46,6 +46,27 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'email_verified_at' => null,
+        ]);
+    }
+
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'admin',
+        ]);
+    }
+
+    public function photographer(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'photographer',
+        ]);
+    }
+
+    public function superAdmin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'super_admin',
         ]);
     }
 }

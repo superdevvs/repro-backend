@@ -3,6 +3,10 @@
 namespace Database\Factories;
 
 use App\Models\Shoot;
+
+/**
+ * @extends Factory<Shoot>
+ */
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -13,34 +17,28 @@ class ShootFactory extends Factory
 
     public function definition(): array
     {
-        $baseQuote = $this->faker->randomFloat(2, 100, 1000);
-        $taxAmount = $this->faker->randomFloat(2, 0, 150);
-        $scheduled = $this->faker->dateTimeBetween('-1 month', '+1 month');
+        $baseQuote = fake()->randomFloat(2, 100, 500);
+        $tax = round($baseQuote * 0.07, 2);
 
         return [
-            'client_id' => User::factory(),
-            'photographer_id' => User::factory(),
-            'service_id' => Service::factory(),
-            'service_category' => 'General',
-            'address' => $this->faker->streetAddress(),
-            'city' => $this->faker->city(),
-            'state' => $this->faker->stateAbbr(),
-            'zip' => $this->faker->postcode(),
-            'scheduled_date' => $scheduled,
-            'time' => $this->faker->time('H:i'),
+            'client_id' => UserFactory::new(),
+            'photographer_id' => UserFactory::new()->photographer(),
+            'service_id' => ServiceFactory::new(),
+            'address' => fake()->streetAddress(),
+            'city' => fake()->city(),
+            'state' => fake()->stateAbbr(),
+            'zip' => fake()->postcode(),
+            'scheduled_date' => fake()->dateTimeBetween('-1 month', '+1 month')->format('Y-m-d'),
+            'time' => fake()->time('H:i'),
             'base_quote' => $baseQuote,
-            'tax_amount' => $taxAmount,
-            'total_quote' => $baseQuote + $taxAmount,
-            'payment_status' => 'unpaid',
+            'tax_amount' => $tax,
+            'total_quote' => $baseQuote + $tax,
+            'payment_status' => 'paid',
             'payment_type' => 'card',
             'notes' => null,
-            'shoot_notes' => null,
-            'company_notes' => null,
-            'photographer_notes' => null,
-            'editor_notes' => null,
-            'status' => 'booked',
-            'workflow_status' => Shoot::WORKFLOW_BOOKED,
-            'created_by' => $this->faker->uuid(),
+            'status' => 'completed',
+            'workflow_status' => Shoot::WORKFLOW_COMPLETED,
+            'created_by' => fake()->userName(),
         ];
     }
 }
