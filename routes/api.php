@@ -10,6 +10,7 @@ use App\Http\Controllers\API\ShootController;
 use App\Http\Controllers\PhotographerAvailabilityController;
 use App\Http\Controllers\PhotographerShootController;
 use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\DropboxAuthController;
 
 
@@ -119,6 +120,12 @@ Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function ()
     Route::put('/admin/services/{id}', [ServiceController::class, 'update']);
 
     Route::delete('/admin/services/{id}', [ServiceController::class, 'destroy']);
+});
+
+Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->prefix('admin')->group(function () {
+    Route::get('invoices', [InvoiceController::class, 'index']);
+    Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download']);
+    Route::patch('invoices/{invoice}/mark-paid', [InvoiceController::class, 'markPaid']);
 });
 
 Route::middleware('auth:sanctum')->group(function () {
