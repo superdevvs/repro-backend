@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ServiceController;
+use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\API\ShootController;
 use App\Http\Controllers\PhotographerAvailabilityController;
@@ -119,6 +120,14 @@ Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->group(function ()
     Route::put('/admin/services/{id}', [ServiceController::class, 'update']);
 
     Route::delete('/admin/services/{id}', [ServiceController::class, 'destroy']);
+});
+
+Route::middleware(['auth:sanctum', 'role:admin,super_admin'])->prefix('admin')->group(function () {
+    Route::get('invoices', [InvoiceController::class, 'index']);
+    Route::get('invoices/{invoice}', [InvoiceController::class, 'show']);
+    Route::post('invoices/generate', [InvoiceController::class, 'generate']);
+    Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send']);
+    Route::post('invoices/{invoice}/mark-paid', [InvoiceController::class, 'markPaid']);
 });
 
 Route::middleware('auth:sanctum')->group(function () {
