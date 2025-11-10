@@ -5,7 +5,6 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\API\AuthController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\ServiceController;
-use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\API\ShootController;
 use App\Http\Controllers\PhotographerAvailabilityController;
