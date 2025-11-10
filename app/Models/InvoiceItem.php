@@ -9,6 +9,26 @@ class InvoiceItem extends Model
 {
     use HasFactory;
 
+    public const TYPE_CHARGE = 'charge';
+    public const TYPE_PAYMENT = 'payment';
+
+    protected $fillable = [
+        'invoice_id',
+        'shoot_id',
+        'type',
+        'description',
+        'quantity',
+        'unit_amount',
+        'total_amount',
+        'recorded_at',
+        'meta',
+    ];
+
+    protected $casts = [
+        'unit_amount' => 'decimal:2',
+        'total_amount' => 'decimal:2',
+        'recorded_at' => 'datetime',
+        'meta' => 'array',
     protected $fillable = [
         'invoice_id',
         'description',
@@ -26,5 +46,20 @@ class InvoiceItem extends Model
     public function invoice()
     {
         return $this->belongsTo(Invoice::class);
+    }
+
+    public function shoot()
+    {
+        return $this->belongsTo(Shoot::class);
+    }
+
+    public function isCharge(): bool
+    {
+        return $this->type === self::TYPE_CHARGE;
+    }
+
+    public function isPayment(): bool
+    {
+        return $this->type === self::TYPE_PAYMENT;
     }
 }
