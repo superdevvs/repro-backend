@@ -16,6 +16,7 @@ class CategoryFactory extends Factory
     {
         return [
             'name' => fake()->unique()->words(2, true),
+            'name' => $this->faker->unique()->words(2, true),
         ];
     }
 }

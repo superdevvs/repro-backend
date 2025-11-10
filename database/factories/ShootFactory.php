@@ -3,11 +3,14 @@
 namespace Database\Factories;
 
 use App\Models\Shoot;
-use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * @extends Factory<Shoot>
  */
+use App\Models\Service;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Factories\Factory;
+
 class ShootFactory extends Factory
 {
     protected $model = Shoot::class;
