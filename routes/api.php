@@ -12,6 +12,7 @@ use App\Http\Controllers\PhotographerAvailabilityController;
 use App\Http\Controllers\PhotographerShootController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\DropboxAuthController;
+use App\Http\Controllers\InvoiceReportController;
 
 
 Route::get('/user', function (Request $request) {
@@ -152,6 +153,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Finalize a shoot (admin toggle triggers this)
     Route::post('/shoots/{shoot}/finalize', [ShootController::class, 'finalize']);
+});
+
+Route::middleware('auth:sanctum')->prefix('reports/invoices')->group(function () {
+    Route::get('summary', [InvoiceReportController::class, 'summary']);
+    Route::get('past-due', [InvoiceReportController::class, 'pastDue']);
 });
 
 Route::get('/services', [ServiceController::class, 'index']);
