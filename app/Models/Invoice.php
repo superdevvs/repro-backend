@@ -7,11 +7,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
-use Carbon\Carbon;
 
 class Invoice extends Model
 {
     use HasFactory;
+    public const STATUS_DRAFT = 'draft';
+    public const STATUS_SENT = 'sent';
+    public const STATUS_PAID = 'paid';
+
+    public const ROLE_CLIENT = 'client';
+    public const ROLE_PHOTOGRAPHER = 'photographer';
 
     protected $fillable = [
         'photographer_id',
@@ -22,24 +27,6 @@ class Invoice extends Model
         'amount_paid',
         'is_sent',
         'is_paid',
-    public const STATUS_DRAFT = 'draft';
-    public const STATUS_SENT = 'sent';
-    public const STATUS_PAID = 'paid';
-
-    public const ROLE_CLIENT = 'client';
-    public const ROLE_PHOTOGRAPHER = 'photographer';
-
-    protected $fillable = [
-        'user_id',
-        'role',
-        'period_start',
-        'period_end',
-        'charges_total',
-        'payments_total',
-        'balance_due',
-        'status',
-        'sent_at',
-    protected $fillable = [
         'shoot_id',
         'client_id',
         'invoice_number',
@@ -85,14 +72,7 @@ class Invoice extends Model
             'paid_at' => $paidAt ? Carbon::parse($paidAt) : now(),
             'amount_paid' => $amountPaid ?? $this->total_amount,
         ])->save();
-        'period_start' => 'date',
-        'period_end' => 'date',
-        'charges_total' => 'decimal:2',
-        'payments_total' => 'decimal:2',
-        'balance_due' => 'decimal:2',
-        'sent_at' => 'datetime',
-        'paid_at' => 'datetime',
-    ];
+    }
 
     public function user()
     {
@@ -146,13 +126,7 @@ class Invoice extends Model
     public function getIsPaidAttribute(): bool
     {
         return $this->status === self::STATUS_PAID;
-        'issue_date' => 'date',
-        'due_date' => 'date',
-        'subtotal' => 'decimal:2',
-        'tax' => 'decimal:2',
-        'total' => 'decimal:2',
-        'paid_at' => 'datetime',
-    ];
+    }
 
     public function shoot()
     {
@@ -162,11 +136,6 @@ class Invoice extends Model
     public function client()
     {
         return $this->belongsTo(User::class, 'client_id');
-    }
-
-    public function items()
-    {
-        return $this->hasMany(InvoiceItem::class);
     }
 
     public function payments()
