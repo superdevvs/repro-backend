@@ -324,16 +324,13 @@ class AddressLookupService
             'format' => 'json',
         ];
 
-        // ✅ Initialize URL before making any request
         $url = $this->locationIqBaseUrl . '/autocomplete';
-        // $response = Http::get($url, $params);
         $response = Http::withOptions(['verify' => false])->get($url, $params);
 
-
-        // Fallback if 404
+        // Fallback if /autocomplete endpoint is not found
         if ($response->status() === 404) {
             $url = $this->locationIqBaseUrl . '/autocomplete.php';
-            $response = Http::get($url, $params);
+            $response = Http::withOptions(['verify' => false])->get($url, $params);
         }
 
         if (!$response->successful()) {
@@ -353,24 +350,32 @@ class AddressLookupService
             return [];
         }
 
+        // ✅ Include both parsed and raw data in each item
         return array_map(function ($it) {
+            $addr = $it['address'] ?? [];
             $display = $it['display_name'] ?? '';
-            $main = $it['address']['house_number'] ?? '';
-            $route = $it['address']['road'] ?? '';
-            $city = $it['address']['city'] ?? ($it['address']['town'] ?? ($it['address']['village'] ?? ''));
-            $state = $it['address']['state'] ?? '';
-            $zip = $it['address']['postcode'] ?? '';
-            $primary = trim(trim($main . ' ' . $route));
+            $main = trim(($addr['house_number'] ?? '') . ' ' . ($addr['road'] ?? ''));
+            $city = $addr['city'] ?? ($addr['town'] ?? ($addr['village'] ?? ''));
+            $state = $addr['state'] ?? '';
+            $zip = $addr['postcode'] ?? '';
             $secondary = trim(join(', ', array_filter([$city, $state, $zip])));
+
             return [
                 'place_id' => (string)($it['place_id'] ?? ''),
                 'description' => $display,
-                'main_text' => $primary ?: ($it['address']['neighbourhood'] ?? $display),
+                'main_text' => $main ?: ($addr['neighbourhood'] ?? $display),
                 'secondary_text' => $secondary,
                 'types' => [$it['class'] ?? 'address'],
+                'latitude' => isset($it['lat']) ? (float)$it['lat'] : null,
+                'longitude' => isset($it['lon']) ? (float)$it['lon'] : null,
+                'importance' => $it['importance'] ?? null,
+                'osm_id' => $it['osm_id'] ?? null,
+                'osm_type' => $it['osm_type'] ?? null,
+                'raw' => $it, // 🚀 full raw data returned here
             ];
         }, $items);
     }
+
 
 
     private function locationIqDetails(string $placeId): ?array
